@@ -1,0 +1,68 @@
+name: act_grab_pan
+version: 1
+
+# Robot type for LeRobot dataset metadata
+robot_type: so_101
+
+# Recording parameters
+rate_hz: 20  # This must be an integer
+max_duration_s: 90.0
+
+# Policy inference parameters # Generate 5 actions per inference (reasonable for 0.5Hz)
+observations:
+  - key: observation.images.top
+    topic: /camera/top
+    type: sensor_msgs/msg/Image
+    image:
+      # bag_to_lerobot decodes to RGB and resizes here
+      resize: [480, 640] # height, width
+    align: {strategy: hold, stamp: header, tol_ms: 1500}
+    qos: {reliability: best_effort, history: keep_last, depth: 10}
+  
+  - key: observation.images.wrist
+    topic: /camera/wrist
+    type: sensor_msgs/msg/Image
+    image:
+      # bag_to_lerobot decodes to RGB and resizes here
+      resize: [480, 640] # height, width
+    align: {strategy: hold, stamp: header, tol_ms: 1500}
+    qos: {reliability: best_effort, history: keep_last, depth: 10}
+
+  - key: observation.state
+    topic: /joint_states
+    type: sensor_msgs/msg/JointState
+    selector:
+      names: [
+        position.follower_arm:shoulder_pan,
+        position.follower_arm:shoulder_lift,
+        position.follower_arm:elbow_flex,
+        position.follower_arm:wrist_flex,
+        position.follower_arm:wrist_roll,
+        position.follower_arm:gripper
+      ]
+    align: {strategy: hold, stamp: header, tol_ms: 1500}
+    qos: {reliability: best_effort, history: keep_last, depth: 50}
+
+actions:
+  - key: action
+    selector:
+      names: [
+        position.follower_arm:shoulder_pan,
+        position.follower_arm:shoulder_lift,
+        position.follower_arm:elbow_flex,
+        position.follower_arm:wrist_flex,
+        position.follower_arm:wrist_roll,
+        position.follower_arm:gripper
+      ]
+    publish:
+      topic: /joint_commands
+      type: sensor_msgs/msg/JointState
+      layout: flat
+      qos: {reliability: best_effort, history: keep_last, depth: 10}
+      strategy:
+        mode: nearest  # 'fifo' | 'nearest' - nearest selects action closest to current time
+        tolerance_ms: 500  
+    safety_behavior: hold  # 'zeros' to send all zeros when stopped, 'hold' to maintain last command
+
+recording:
+  storage: mcap

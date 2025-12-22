@@ -7,7 +7,7 @@ import os
 
 def generate_launch_description():
     share = get_package_share_directory('rosetta')
-    contract = os.path.join(share, 'contracts', 'turtlebot.yaml')
+    contract = os.path.join(share, 'contracts', 'act_grab_pan.yaml')
     log_level_arg = DeclareLaunchArgument(
             'log_level',
             default_value='info',  # Default log level
@@ -24,8 +24,11 @@ def generate_launch_description():
             emulate_tty=True,
             parameters=[
                 {'contract_path': contract},
-                {'policy_path': 'iblnk/act-turtlebot3_demo'},
-                {'use_sim_time': True},
+                {'policy_device': 'npu'},
+                # Your local policy path here
+                {'policy_path': '/root/Workspace/TrainedModels/act/230000/pretrained_model'},
+                {'use_sim_time': False},
+                {'use_chunks': False}
                 #TODO add inference specific parameters here
             ],
             arguments=['--ros-args', '--log-level', LaunchConfiguration('log_level')],

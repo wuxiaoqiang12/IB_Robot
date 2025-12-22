@@ -20,7 +20,7 @@ import numpy as np
 import rclpy
 from rclpy.action import ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
-from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
+from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor, SingleThreadedExecutor
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from rclpy.qos import QoSProfile

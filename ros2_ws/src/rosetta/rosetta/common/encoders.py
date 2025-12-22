@@ -23,15 +23,41 @@ from rosetta.common.contract_utils import register_encoder
 
 # ---------- Helper functions ----------
 
-
 def dot_set(obj, path: str, value: float):
-    """Set a dotted attribute on a pre-shaped ROS message (no new objects)."""
+    """
+    FYI: This function is adjusted for ROS joint_state style dotted paths, referred to the dot_get in decoders.py
+
+    Set a value on a ROS message or nested object using a dotted attribute path.
+    Inverse operation of dot_get.
+
+    Supports a special JointState-style pattern: "<field>.<joint_name>".
+    Example:
+        path = "position.elbow_joint"
+        -> looks up index of "elbow_joint" inside msg.name and sets msg.position[idx] = value
+    """
     cur = obj
     parts = path.split(".")
+
+    if len(parts) == 2 and hasattr(obj, "name"):
+        field, key = parts
+        names = list(obj.name)
+
+        field_arr = getattr(obj, field, [])
+        if len(field_arr) == 0:
+            setattr(obj, field, [0.0] * len(names))
+
+        if key in names:
+            idx = names.index(key)
+            arr = getattr(obj, field)
+            arr[idx] = float(value)
+        
+        return
+
+    cur = obj
     for p in parts[:-1]:
         cur = getattr(cur, p)
+    
     setattr(cur, parts[-1], float(value))
-
 
 def _encode_via_dotted_paths(
     ros_type: str,
@@ -205,4 +231,27 @@ def _enc_multidof_command(
         else:
             msg.values_dot.append(0.0)
     
+    return msg
+
+# ---------- General encoders ----------
+@register_encoder("sensor_msgs/msg/JointState")
+def _enc_joint_state(
+    names: List[str], action_vec: Sequence[float], clamp: Optional[Tuple[float, float]]
+):
+    if not names or len(names) == 0 or len(names[0].split('.')) != 2:
+        raise ValueError(
+            f"no joint name provided for sensor_msgs/msg/JointState or not as dotted path format"
+        )
+
+    msg_cls = get_message("sensor_msgs/msg/JointState")
+    msg = msg_cls()
+    msg.name = [names[i].split('.')[1] for i in range(len(names))]
+
+    arr = np.asarray(action_vec, dtype=np.float32).reshape(-1)
+    if clamp:
+        arr = np.clip(arr, clamp[0], clamp[1])
+
+    for index, path in enumerate(names):
+        dot_set(msg, path, arr[index])
+
     return msg
