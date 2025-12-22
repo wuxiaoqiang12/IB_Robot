@@ -1,6 +1,6 @@
 # Task: Grab a banana using a single arm
 # Robot: so101
-# Cameras: top, leftwrist, rightwrist
+# Cameras: top, wrist
 
 robot_interface:
   ros__parameters:

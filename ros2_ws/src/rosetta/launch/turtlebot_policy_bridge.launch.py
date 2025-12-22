@@ -25,11 +25,9 @@ def generate_launch_description():
             parameters=[
                 {'contract_path': contract},
                 {'policy_device': 'npu'},
-                # Your local policy path here
                 {'policy_path': '/root/Workspace/TrainedModels/act/230000/pretrained_model'},
                 {'use_sim_time': False},
                 {'use_chunks': False}
-                #TODO add inference specific parameters here
             ],
             arguments=['--ros-args', '--log-level', LaunchConfiguration('log_level')],
         ),
