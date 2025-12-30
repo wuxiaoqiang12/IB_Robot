@@ -1,19 +1,17 @@
 # !/usr/bin/env python3
-# -*- coding: utf-8 -*-
 # @Time    : 2025/11/20 10:26
 # @Author  : Yida Hao
 # @File    : robot_config.py
 
+import rclpy
 from lerobot.cameras.opencv.configuration_opencv import OpenCVCameraConfig
+from lerobot.robots import Robot
 from lerobot.robots.so101_follower.config_so101_follower import SO101FollowerConfig
 from lerobot.robots.so101_follower.so101_follower import SO101Follower
 from lerobot.robots.so101_follower.so101_follower_mock import SO101FollowerMock
-from lerobot.robots import Robot
-
-import rclpy
-from rclpy.node import Node
 from rcl_interfaces.msg import ParameterDescriptor, ParameterType
 from rclpy import Parameter
+from rclpy.node import Node
 
 """
 Robot configs (cameras, motors, etc.) for various scenarios.
@@ -22,7 +20,7 @@ Robot configs (cameras, motors, etc.) for various scenarios.
 class RosArgsParser:
     def __init__(self, node: Node):
         self.node = node
-    
+
     def load_ros_params(self) -> list[Robot]:
         """
         Load ROS parameters for robot configuration.
@@ -33,9 +31,11 @@ class RosArgsParser:
             description='Whether to use mock robot implementation'
         ))
         self.is_mock = self.node.get_parameter('is_mock').value
-        
-        # FYI: An array type parameter cannot defaults to an empty list, even if you declare its type by using ParameterDescriptor as below
-        # self.node.declare_parameter('robot_ids', [], ParameterDescriptor(ParameterType.PARAMETER_STRING_ARRAY))
+
+        # FYI: An array type parameter cannot defaults to an empty list, even if you declare
+        # its type by using ParameterDescriptor as below
+        # self.node.declare_parameter(
+        #   'robot_ids', [], ParameterDescriptor(ParameterType.PARAMETER_STRING_ARRAY))
         # the default type is deduced as BYTES_ARRAY in all the cases (not STRINGS_ARRAY)
         # ROS2 issue: https://github.com/ros2/rclpy/issues/912
         # A weird workaround is to use get_parameter_or with user defined Parameter of empty list
@@ -48,7 +48,7 @@ class RosArgsParser:
             type_=rclpy.Parameter.Type.STRING_ARRAY,
             value=[]
         )).value
- 
+
         print(f"robot_ids: {self.robot_ids}")
 
         self.node.get_logger().info(f"is_mock: {self.is_mock}")
@@ -81,27 +81,40 @@ class RosArgsParser:
             )).value
 
             for camera_name in camera_names:
-                self._declare_required_param(f'{robot_id}.cameras.{camera_name}.index', descriptor=ParameterDescriptor(
-                    type=ParameterType.PARAMETER_INTEGER,
-                    description='Camera index'
-                ))
-                self._declare_required_param(f'{robot_id}.cameras.{camera_name}.width', descriptor=ParameterDescriptor(
-                    type=ParameterType.PARAMETER_INTEGER,
-                    description='Camera width'
-                ))
-                self._declare_required_param(f'{robot_id}.cameras.{camera_name}.height', descriptor=ParameterDescriptor(
-                    type=ParameterType.PARAMETER_INTEGER,
-                    description='Camera height'
-                ))
-                self.node.declare_parameter(f'{robot_id}.cameras.{camera_name}.fps', 30, ParameterDescriptor(
-                    type=ParameterType.PARAMETER_INTEGER,
-                    description=f'Camera FPS'
-                ))
+                self._declare_required_param(
+                    f'{robot_id}.cameras.{camera_name}.index',
+                    descriptor=ParameterDescriptor(
+                        type=ParameterType.PARAMETER_INTEGER,
+                        description='Camera index'
+                    )
+                )
+                self._declare_required_param(
+                    f'{robot_id}.cameras.{camera_name}.width',
+                    descriptor=ParameterDescriptor(
+                        type=ParameterType.PARAMETER_INTEGER,
+                        description='Camera width'
+                    )
+                )
+                self._declare_required_param(
+                    f'{robot_id}.cameras.{camera_name}.height',
+                    descriptor=ParameterDescriptor(
+                        type=ParameterType.PARAMETER_INTEGER,
+                        description='Camera height'
+                    )
+                )
+                self.node.declare_parameter(
+                    f'{robot_id}.cameras.{camera_name}.fps',
+                    30,
+                    ParameterDescriptor(
+                        type=ParameterType.PARAMETER_INTEGER,
+                        description='Camera FPS'
+                    )
+                )
 
             robot_type = self.node.get_parameter(f'{robot_id}.type').value
 
             robots.append(self._make_robot(robot_type, robot_id))
-        
+
         return robots
 
     def _declare_required_param(self, param_name: str, descriptor: ParameterDescriptor):
@@ -111,7 +124,7 @@ class RosArgsParser:
         param = self.node.declare_parameter(param_name, descriptor=descriptor)
         if param.type_ == param.Type.NOT_SET:
             raise ValueError(f"Required parameter '{param_name}' is not set.")
-        
+
 
     def _make_robot(self, robot_type: str, robot_id: str) -> Robot:
         """
