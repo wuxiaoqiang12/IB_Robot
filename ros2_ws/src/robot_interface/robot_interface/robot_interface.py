@@ -3,6 +3,7 @@
 # @Author  : Yida Hao
 # @File    : robot_interface.py
 # @Description : Robot hardware interface node aggregating all devices.
+"""Robot hardware interface node aggregating all devices."""
 
 from concurrent.futures import ThreadPoolExecutor
 
@@ -15,15 +16,16 @@ from robot_interface.ros_args_parser import RosArgsParser
 
 cvbridge = CvBridge()
 
-# TODO: 将该前缀放到整个 workspace 的共享目录中
-# 用来让其他节点识别到这是一个摄像头话题
 CAMERA_PREFIX = "/camera/"
 
 # Frequency to read motors
 READING_FREQUENCY = 30  # Hz
 
 class RobotInterface(Node):
+    """Robot hardware interface node aggregating all devices."""
+
     def __init__(self):
+        """Initialize robot interface node."""
         super().__init__('robot_interface')
         ros_args_parser = RosArgsParser(self)
 
@@ -38,11 +40,12 @@ class RobotInterface(Node):
         self.init_camera_publishers()
         self.init_robot_reading_loop()
 
-
     def init_robot_reading_loop(self):
+        """Initialize robot reading loop timer."""
         self.timer = self.create_timer(1.0 / READING_FREQUENCY, self.read_robot)
 
     def init_joint_state_publisher(self):
+        """Initialize joint state publisher."""
         qos = QoSProfile(depth=10, reliability=QoSReliabilityPolicy.BEST_EFFORT)
         self.joint_state_publisher = self.create_publisher(
             JointState,
@@ -51,6 +54,7 @@ class RobotInterface(Node):
         )
 
     def init_joint_command_subscriber(self):
+        """Initialize joint command subscriber."""
         qos = QoSProfile(depth=10, reliability=QoSReliabilityPolicy.BEST_EFFORT)
         self.joint_command_subscriber = self.create_subscription(
             JointState,
@@ -60,6 +64,7 @@ class RobotInterface(Node):
         )
 
     def joint_command_callback(self, msg: JointState):
+        """Handle joint command messages."""
         for robot in self.robots:
             action_dict = {}
 
@@ -74,6 +79,7 @@ class RobotInterface(Node):
             robot.send_action(action_dict)
 
     def init_camera_publishers(self):
+        """Initialize camera publishers for all robots."""
         self.cam_publishers = {}
 
         for robot in self.robots:
@@ -89,6 +95,7 @@ class RobotInterface(Node):
                 self.cam_publishers[camera_name] = self.create_publisher(Image, topic_name, 10)
 
     def read_robot(self):
+        """Read observations from robots and publish joint states and images."""
         with ThreadPoolExecutor() as executor:
             futures = [executor.submit(robot.get_observation) for robot in self.robots]
             obs_list = [future.result() for future in futures]
@@ -124,8 +131,7 @@ class RobotInterface(Node):
                 publisher.publish(img_msg)
 
     def cleanup(self):
+        """Disconnect all robots."""
         for robot in self.robots:
             robot.disconnect()
             self.get_logger().info(f"Disconnected robot: {robot.id}")
-
-

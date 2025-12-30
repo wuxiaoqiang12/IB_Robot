@@ -2,6 +2,7 @@
 # @Time    : 2025/11/20 10:26
 # @Author  : Yida Hao
 # @File    : robot_config.py
+"""Robot configuration parser for loading ROS parameters."""
 
 import rclpy
 from lerobot.cameras.opencv.configuration_opencv import OpenCVCameraConfig
@@ -13,13 +14,14 @@ from rcl_interfaces.msg import ParameterDescriptor, ParameterType
 from rclpy import Parameter
 from rclpy.node import Node
 
-"""
-Robot configs (cameras, motors, etc.) for various scenarios.
-"""
-
 class RosArgsParser:
+    """Parser for ROS parameters to configure robots and cameras."""
+
     def __init__(self, node: Node):
+        """Initialize ROS args parser."""
         self.node = node
+        self.is_mock = False
+        self.robot_ids = []
 
     def load_ros_params(self) -> list[Robot]:
         """
@@ -132,8 +134,7 @@ class RosArgsParser:
         """
         if robot_type == 'so101_follower':
             return self._make_so101_follower(robot_id)
-        else:
-            raise ValueError(f"Unsupported robot type: {robot_type}")
+        raise ValueError(f"Unsupported robot type: {robot_type}")
 
 
     def _make_so101_follower(self, robot_id: str) -> Robot:
@@ -173,7 +174,4 @@ class RosArgsParser:
 
         if self.is_mock:
             return SO101FollowerMock(config)
-        else:
-            return SO101Follower(config)
-
-
+        return SO101Follower(config)
