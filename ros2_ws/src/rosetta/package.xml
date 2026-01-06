@@ -9,8 +9,6 @@
   <maintainer email="isaac.blankenau@gmail.com">ros</maintainer>
   <license>Apache-2.0</license>
 
-  <buildtool_depend>ament_python</buildtool_depend>
-
   <build_depend>rosetta_interfaces</build_depend>
   
   <exec_depend>rclpy</exec_depend>
