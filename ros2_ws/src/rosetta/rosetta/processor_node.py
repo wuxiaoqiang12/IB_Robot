@@ -2,6 +2,8 @@
 Independent pre-processors and post-processors for Lerobot policies.
 """
 
+import os
+import json
 from rclpy.node import Node
 from typing import List, Any, Dict, Optional
 from pathlib import Path
@@ -10,6 +12,7 @@ import rclpy
 from rclpy.executors import SingleThreadedExecutor
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rosidl_runtime_py.utilities import get_message
+from lerobot.policies.factory import make_pre_post_processors
 from rosetta.common.contract_utils import (
     load_contract,
     iter_specs,
@@ -23,9 +26,42 @@ from rosetta.common.contract_utils import (
     stamp_from_header_ns,
     encode_value,
 )
+import torch
 
 # Prefix to indicate data has been processed
 PROCESSED_PREFIX = "processed"
+
+def _device_from_param(requested: Optional[str] = None) -> torch.device:
+    r = (requested or "auto").lower().strip()
+
+    def mps_available() -> bool:
+        return bool(getattr(torch.backends, "mps", None)) and torch.backends.mps.is_available()
+
+    if r == "auto":
+        if torch.cuda.is_available():
+            return torch.device("cuda")
+        if mps_available():
+            return torch.device("mps")
+        return torch.device("cpu")
+
+    # Explicit CUDA (supports 'cuda' and 'cuda:N')
+    if r.startswith("cuda"):
+        if not torch.cuda.is_available():
+            raise RuntimeError("CUDA requested but not available.")
+        return torch.device(r)  # 'cuda' or 'cuda:N'
+
+    # Explicit MPS (or 'metal' alias)
+    if r in {"mps", "metal"}:
+        if not mps_available():
+            raise RuntimeError("MPS requested but not available.")
+        return torch.device("mps")
+
+    # Anything else: try to parse ('cpu', 'xpu', etc.), otherwise fallback
+    try:
+        return torch.device(r)
+    except (TypeError, ValueError, RuntimeError):
+        # Invalid device requested, fallback to CPU
+        return torch.device("cpu")
 
 @dataclass(slots=True)
 class _SubState:
@@ -38,7 +74,10 @@ class ProcessorNode(Node):
     def __init__(self):
         super().__init__('processor_node')
         # ---------------- Parameters ----------------
-        self.declare_parameter("contract_path", "")
+        self.declare_parameter("contract_path", "")        
+        self.declare_parameter("policy_path", "")
+        # TODO: refector by using common device_from_param function
+        self.declare_parameter("policy_device", "cuda")
 
         # ---------------- Contract ----------------
         contract_path = str(self.get_parameter("contract_path").value or "")
@@ -57,11 +96,45 @@ class ProcessorNode(Node):
         self._obs_zero = {}
         self._state_specs = [s for s in self._obs_specs if s.key == "observation.state"]
         self.fps = int(self._contract.rate_hz)
+        self.device = _device_from_param(str(self.get_parameter("policy_device").value))
+
         if self.fps <= 0:
             raise ValueError("Contract rate_hz must be >= 1")
         self.step_ns = int(round(1e9 / self.fps))
         self.step_sec = 1.0 / self.fps
 
+        # TODO: load policy config for processors
+        # ---------------- Policy load ----------------
+        policy_path = str(self.get_parameter("policy_path").value or "")
+        if not policy_path:
+            raise RuntimeError("policy_bridge: 'policy_path' is required")
+        
+        if not os.path.exists(policy_path):
+            raise FileNotFoundError(f"Policy path does not exist: {policy_path}")
+
+        # For local paths, try to read config.json
+        cfg_json = os.path.join(policy_path, "config.json")
+        policy_cfg = {}
+        try:
+            if os.path.exists(cfg_json):
+                with open(cfg_json, "r", encoding="utf-8") as f:
+                    policy_cfg = json.load(f)
+        except (OSError, json.JSONDecodeError, KeyError) as e:
+            self.get_logger().warning(
+                f"Could not read policy config.json: {e!r}"
+                )
+        
+        # ------------ pre-post processors init ----------------
+        self.preprocessor, self.postprocessor = make_pre_post_processors(
+            policy_cfg=policy_cfg,
+            pretrained_path=policy_path,
+            preprocessor_overrides={
+                "device_processor": {"device": str(self.device)}},
+            postprocessor_overrides={
+                "device_processor": {"device": str(self.device)}},
+        )
+
+        # TODO: refector init function
         """
         SpecView(
            key='observation.images.top', 

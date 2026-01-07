@@ -44,7 +44,7 @@ setup(
         'console_scripts': [
             'episode_recorder = rosetta.episode_recorder:main',
             'policy_bridge_node = rosetta.policy_bridge_node:main',
-            'processors_pipeline = rosetta.processors:main',
+            'processors_pipeline = rosetta.processor_node:main',
         ],
     },
 )

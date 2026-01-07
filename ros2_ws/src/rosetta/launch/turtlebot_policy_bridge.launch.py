@@ -18,14 +18,14 @@ def generate_launch_description():
         log_level_arg,
         Node(
             package='rosetta',
-            executable='policy_bridge_node',
-            name='policy_bridge',
+            executable='processors_pipeline',
+            name='processors_pipeline',
             output='screen',
             emulate_tty=True,
             parameters=[
                 {'contract_path': contract},
-                {'policy_device': 'npu'},
-                {'policy_path': '/root/Workspace/TrainedModels/act/230000/pretrained_model'},
+                {'policy_device': 'cuda'},
+                {'policy_path': '/home/ch3cooh/Workspace/TrainedModels/act/230000/pretrained_model'},
                 {'use_sim_time': False},
                 {'use_chunks': False}
             ],
