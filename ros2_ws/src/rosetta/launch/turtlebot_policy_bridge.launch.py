@@ -25,7 +25,6 @@ def generate_launch_description():
             parameters=[
                 {'contract_path': contract},
                 {'policy_device': 'cuda'},
-                # {'policy_path': '/home/ch3cooh/Workspace/TrainedModels/act/230000/pretrained_model'},
                 {'policy_path': '/home/ch3cooh/Workspace/TrainedModels/pi0.5/pretrained_model'},
             ],
             arguments=['--ros-args', '--log-level', LaunchConfiguration('log_level')],
@@ -39,9 +38,10 @@ def generate_launch_description():
             parameters=[
                 {'contract_path': contract},
                 {'policy_device': 'cuda'},
-                {'policy_path': '/home/ch3cooh/Workspace/TrainedModels/act/230000/pretrained_model'},
-                # {'policy_path': '/home/ch3cooh/Workspace/TrainedModels/pi0.5/pretrained_model'},
+                {'policy_path': '/home/ch3cooh/Workspace/TrainedModels/pi0.5/pretrained_model'},
             ],
             arguments=['--ros-args', '--log-level', LaunchConfiguration('log_level')],
         ),
     ])
+
+

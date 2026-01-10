@@ -321,14 +321,14 @@ def enc_variant_list(batch: Dict[str, Any]):
     
     for key, value in batch.items():
         ## TODO: hardcoded filter, may be configurable in contract
-        if not key.startswith('task') and not key.startswith('observation'):
+        if not key.startswith('task') and not key.startswith('observation') and not key.startswith('action'):
             continue
         if isinstance(value, Tensor):
             variant_msg = _enc_tensor_to_variant(value)
         elif isinstance(value, list):
             variant_msg = _enc_list_to_variant(value)
         else:
-            raise ValueError(f"Unsupported batch field encoding: {type(value)}")
+            continue
         variant_msg.key = key
         msg.variants.append(variant_msg)
 

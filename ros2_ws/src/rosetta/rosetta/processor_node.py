@@ -28,6 +28,7 @@ from rosetta.common.contract_utils import (
     encode_value,
 )
 from rosetta.common.encoders import enc_variant_list
+from rosetta.common.decoders import dec_variant_list
 import torch
 from time import perf_counter
 
@@ -164,14 +165,35 @@ class ProcessorNode(Node):
                 stamp_src=s.stamp_src,
             )
         
-        # Get variant topic from contract
-        variant_topic = self._contract.process.get("variant_topic_name", "/rosetta/batch")
+        # Get variant topics from contract
+        input_topic = self._contract.process.get("input_topic_name", "/rosetta/batch")
+        output_topic = self._contract.process.get("output_topic_name", "/rosetta/action")
+        
         self._variant_pub = self.create_publisher(
             get_message("rosetta_interfaces/msg/VariantsList"),
-            variant_topic,
+            input_topic,
             10,
         )
-        self.get_logger().info(f"Publishing variants to: {variant_topic}")
+        self.get_logger().info(f"Publishing pre-processed variants to: {input_topic}")
+        
+        # Subscribe to inference output for post-processing
+        self._action_specs = [s for s in self._specs if s.is_action]
+        self._act_pubs: Dict[str, Any] = {}
+        for spec in self._action_specs:
+            msg_cls = get_message(spec.ros_type)
+            pub = self.create_publisher(msg_cls, spec.topic, 10)
+            self._act_pubs[spec.topic] = pub
+            self.get_logger().info(f"Created action publisher: {spec.topic}")
+        
+        variant_msg_cls = get_message("rosetta_interfaces/msg/VariantsList")
+        self.create_subscription(
+            variant_msg_cls,
+            output_topic,
+            self._action_cb,
+            10,
+            callback_group=self._cbg,
+        )
+        self.get_logger().info(f"Subscribed to inference output: {output_topic}")
         
         # ---------------- Timer ----------------
         self._cbg_timers = ReentrantCallbackGroup()
@@ -190,6 +212,63 @@ class ProcessorNode(Node):
         if val is not None:
             dict_key = self._make_dict_key(spec)
             self._subs[dict_key].buf.push(ts_ns, val)
+    
+    def _action_cb(self, msg) -> None:
+        """Callback for inference output - apply post-processing and publish actions."""
+        try:
+            batch = dec_variant_list(msg, self.device)
+            action = batch.get("action")
+            if action is None:
+                self.get_logger().warning("No 'action' key in inference output")
+                return
+            
+            # Apply post-processing
+            action = self.postprocessor(action)
+            
+            # Publish actions
+            self._publish_actions(action)
+        except Exception as e:
+            self.get_logger().error(f"Failed to post-process action: {e!r}")
+    
+    def _publish_actions(self, action: Any) -> None:
+        """Encode and publish action vectors."""
+        # Convert action to numpy
+        if torch.is_tensor(action):
+            action_np = action.detach().cpu().numpy()
+        else:
+            action_np = np.asarray(action)
+        
+        # Flatten if needed
+        action_np = action_np.ravel()
+        
+        # Publish each action spec
+        start_idx = 0
+        for spec in self._action_specs:
+            spec_len = len(spec.names) if spec.names else 0
+            if spec_len == 0:
+                continue
+            
+            end_idx = start_idx + spec_len
+            if end_idx > len(action_np):
+                self.get_logger().error(
+                    f"Action vector too short for {spec.key}: "
+                    f"need {spec_len}, have {len(action_np) - start_idx}"
+                )
+                break
+            
+            spec_action = action_np[start_idx:end_idx]
+            
+            ros_msg = encode_value(
+                ros_type=spec.ros_type,
+                names=spec.names,
+                action_vec=spec_action,
+                clamp=getattr(spec, "clamp", None),
+            )
+            
+            pub = self._act_pubs[spec.topic]
+            pub.publish(ros_msg)
+            
+            start_idx = end_idx
     
     def _make_dict_key(self, spec: SpecView) -> str:
         """Create unique dict key for multiple observation.state specs."""

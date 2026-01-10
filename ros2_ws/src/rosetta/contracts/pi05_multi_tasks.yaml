@@ -65,7 +65,9 @@ actions:
     safety_behavior: hold  # 'zeros' to send all zeros when stopped, 'hold' to maintain last command
 
 process:
-  variant_topic_name: /rosetta/batch
+  input_topic_name: /rosetta/batch
+  output_topic_name: /rosetta/action
+
 
 recording:
   storage: mcap

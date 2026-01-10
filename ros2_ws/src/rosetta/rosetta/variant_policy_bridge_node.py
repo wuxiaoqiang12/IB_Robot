@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-VariantPolicyBridge: Simplified policy inference node for VariantsList messages.
+VariantPolicyBridge: Policy inference node for VariantsList messages.
 
 This node:
-1. Subscribes to rosetta_interfaces/msg/VariantsList
-2. Buffers incoming variants using StreamBuffer
-3. Samples variants at contract-specified frequency
-4. Runs policy inference and publishes actions
+1. Subscribes to rosetta_interfaces/msg/VariantsList (pre-processed observations)
+2. Runs policy inference
+3. Publishes raw action output as VariantsList (for post-processing by processor_node)
 """
 
 from __future__ import annotations
@@ -28,16 +27,16 @@ from rclpy.qos import QoSProfile
 from rosidl_runtime_py.utilities import get_message
 import torch
 
-from lerobot.policies.factory import get_policy_class, make_pre_post_processors
+from lerobot.policies.factory import get_policy_class
 
 from rosetta.common.contract_utils import (
     load_contract,
     iter_specs,
     SpecView,
     StreamBuffer,
-    encode_value,
 )
 from rosetta.common.decoders import dec_variant_list
+from rosetta.common.encoders import enc_variant_list
 
 
 def _device_from_param(requested: Optional[str] = None) -> torch.device:
@@ -71,7 +70,7 @@ def _device_from_param(requested: Optional[str] = None) -> torch.device:
 
 
 class VariantPolicyBridge(Node):
-    """Simplified policy bridge for VariantsList input."""
+    """Policy inference bridge - receives pre-processed observations, outputs raw actions."""
 
     def __init__(self) -> None:
         super().__init__("variant_policy_bridge")
@@ -87,8 +86,9 @@ class VariantPolicyBridge(Node):
             raise RuntimeError("contract_path is required")
         self._contract = load_contract(Path(contract_path))
 
-        # Get variant topic from contract
-        variant_topic = self._contract.process.get("variant_topic_name", "/rosetta/batch")
+        # Get variant topics from contract
+        input_topic = self._contract.process.get("input_topic_name", "/rosetta/batch")
+        output_topic = self._contract.process.get("output_topic_name", "/rosetta/action")
 
         # Setup specs
         self._specs: List[SpecView] = list(iter_specs(self._contract))
@@ -132,36 +132,29 @@ class VariantPolicyBridge(Node):
         self.policy = policy_class.from_pretrained(policy_path)
         self.get_logger().info(f"Loaded policy: {policy_class.__name__}")
 
-        # Setup pre/post processors
-        _, self.postprocessor = make_pre_post_processors(
-            policy_cfg=policy_cfg,
-            pretrained_path=policy_path,
-            preprocessor_overrides={"device_processor": {"device": str(self.device)}},
-            postprocessor_overrides={"device_processor": {"device": str(self.device)}},
-        )
-
         # TODO: convert to streambuffer
         self._variant_buffer = {}
 
-        # Setup publishers for actions
-        self._act_pubs: Dict[str, Any] = {}
-        for spec in self._action_specs:
-            msg_cls = get_message(spec.ros_type)
-            pub = self.create_publisher(msg_cls, spec.topic, 10)
-            self._act_pubs[spec.topic] = pub
-            self.get_logger().info(f"Created action publisher: {spec.topic}")
-
-        # Setup subscription
+        # Setup publisher for inference output (raw action)
         self._cbg = ReentrantCallbackGroup()
         variant_msg_cls = get_message("rosetta_interfaces/msg/VariantsList")
+        
+        self._action_pub = self.create_publisher(
+            variant_msg_cls,
+            output_topic,
+            10,
+        )
+        self.get_logger().info(f"Publishing inference output to: {output_topic}")
+
+        # Setup subscription for pre-processed observations
         self.create_subscription(
             variant_msg_cls,
-            variant_topic,
+            input_topic,
             self._variant_cb,
             10,
             callback_group=self._cbg,
         )
-        self.get_logger().info(f"Subscribed to: {variant_topic}")
+        self.get_logger().info(f"Subscribed to: {input_topic}")
 
         # Inference loop timer
         self._timer = self.create_timer(self.step_sec, self._inference_tick, callback_group=self._cbg)
@@ -193,49 +186,10 @@ class VariantPolicyBridge(Node):
         with torch.inference_mode():
             action = self.policy.select_action(batch)
         
-        action = self.postprocessor(action)
-        
-        self._publish_actions(action)
-
-    def _publish_actions(self, action: Any) -> None:
-        """Encode and publish action vectors."""
-        # Convert action to numpy
-        if torch.is_tensor(action):
-            action_np = action.detach().cpu().numpy()
-        else:
-            action_np = np.asarray(action)
-        
-        # Flatten if needed
-        action_np = action_np.ravel()
-        
-        # Publish each action spec
-        start_idx = 0
-        for spec in self._action_specs:
-            spec_len = len(spec.names) if spec.names else 0
-            if spec_len == 0:
-                continue
-            
-            end_idx = start_idx + spec_len
-            if end_idx > len(action_np):
-                self.get_logger().error(
-                    f"Action vector too short for {spec.key}: "
-                    f"need {spec_len}, have {len(action_np) - start_idx}"
-                )
-                break
-            
-            spec_action = action_np[start_idx:end_idx]
-            
-            msg = encode_value(
-                ros_type=spec.ros_type,
-                names=spec.names,
-                action_vec=spec_action,
-                clamp=getattr(spec, "clamp", None),
-            )
-            
-            pub = self._act_pubs[spec.topic]
-            pub.publish(msg)
-            
-            start_idx = end_idx
+        # Publish raw action as VariantsList (no post-processing here)
+        action_batch = {"action": action}
+        variant_msg = enc_variant_list(action_batch)
+        self._action_pub.publish(variant_msg)
 
 
 def main():
