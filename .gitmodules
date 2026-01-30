@@ -1,0 +1,3 @@
+[submodule "ros2_ws/src/so101_hardware_cpp/FTServo_Linux"]
+	path = ros2_ws/src/so101_hardware_cpp/FTServo_Linux
+	url = https://github.com/ftservo/FTServo_Linux.git

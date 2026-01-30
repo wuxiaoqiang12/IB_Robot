@@ -1,0 +1,25 @@
+generated: '2025-11-06T15:06:56.745109'
+'1':
+  range_min: 775
+  range_max: 3481
+  homing_offset: 2128
+'2':
+  range_min: 847
+  range_max: 3207
+  homing_offset: 2027
+'3':
+  range_min: 917
+  range_max: 3111
+  homing_offset: 2014
+'4':
+  range_min: 849
+  range_max: 3168
+  homing_offset: 2008
+'5':
+  range_min: 196
+  range_max: 3978
+  homing_offset: 2087
+'6':
+  range_min: 2044
+  range_max: 3207
+  homing_offset: 2625
