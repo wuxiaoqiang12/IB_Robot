@@ -1,0 +1,147 @@
+# SO-101 Single Arm Robot Configuration
+# This configuration defines the complete hardware setup for a single SO-101 arm
+# with cameras for imitation learning.
+
+robot:
+  name: so101_single_arm
+  type: so101
+  robot_type: so_101  # For LeRobot dataset metadata
+
+  # ros2_control configuration
+  ros2_control:
+    hardware_plugin: so101_hardware/SO101SystemHardware
+    port: /dev/ttyACM0
+    calib_file: $(env HOME)/.calibrate/so101_follower_calibrate.json
+    # Reset positions (optional) - safe folded position for dog-mounted arm
+    reset_positions:
+      "1": 0.0813
+      "2": 3.7905
+      "3": 7.0379
+      "4": -0.6228
+      "5": 2.3869
+    urdf_path: $(find lerobot_description)/urdf/so101.urdf.xacro
+
+  # Peripheral devices (cameras, microphones, etc.)
+  peripherals:
+    - type: camera
+      name: top
+      driver: opencv
+      index: 0
+      width: 640
+      height: 480
+      fps: 30
+      pixel_format: bgr8
+      frame_id: camera_top_frame
+      optical_frame_id: camera_top_optical_frame
+      # Camera position relative to parent frame (base_link)
+      transform:
+        parent_frame: base_link
+        x: 0.0
+        y: 0.0
+        z: 0.5  # 50cm above base
+        roll: 0.0
+        pitch: 0.0
+        yaw: 0.0
+      # Optional: camera calibration URL (standard ROS2 location)
+      # camera_info_url: file://$(env HOME)/.ros/camera_info/top_camera.yaml
+
+    - type: camera
+      name: wrist
+      driver: opencv
+      index: 2
+      width: 640
+      height: 480
+      fps: 60
+      pixel_format: bgr8
+      frame_id: camera_wrist_frame
+      optical_frame_id: camera_wrist_optical_frame
+      # Camera position relative to parent frame
+      transform:
+        parent_frame: wrist_link
+        x: 0.0
+        y: 0.0
+        z: 0.0
+        roll: 0.0
+        pitch: 0.0
+        yaw: 0.0
+      # camera_info_url: file://$(env HOME)/.ros/camera_info/wrist_camera.yaml
+
+  # Rosetta contract integration
+  contract:
+    base_contract: $(find rosetta)/contracts/act_grab_pan.yaml
+    rate_hz: 20
+    max_duration_s: 90.0
+
+    observations:
+      - key: observation.images.top
+        topic: /camera/top
+        peripheral: top  # References camera 'top' from peripherals above
+        image:
+          resize: [480, 640]  # height, width for LeRobot
+        align:
+          strategy: hold
+          stamp: header
+          tol_ms: 1500
+        qos:
+          reliability: best_effort
+          history: keep_last
+          depth: 10
+
+      - key: observation.images.wrist
+        topic: /camera/wrist
+        peripheral: wrist  # References camera 'wrist' from peripherals above
+        image:
+          resize: [480, 640]
+        align:
+          strategy: hold
+          stamp: header
+          tol_ms: 1500
+        qos:
+          reliability: best_effort
+          history: keep_last
+          depth: 10
+
+      - key: observation.state
+        topic: /joint_states
+        selector:
+          names:
+            - position.follower_arm:shoulder_pan
+            - position.follower_arm:shoulder_lift
+            - position.follower_arm:elbow_flex
+            - position.follower_arm:wrist_flex
+            - position.follower_arm:wrist_roll
+            - position.follower_arm:gripper
+        align:
+          strategy: hold
+          stamp: header
+          tol_ms: 1500
+        qos:
+          reliability: best_effort
+          history: keep_last
+          depth: 50
+
+    actions:
+      - key: action
+        selector:
+          names:
+            - position.follower_arm:shoulder_pan
+            - position.follower_arm:shoulder_lift
+            - position.follower_arm:elbow_flex
+            - position.follower_arm:wrist_flex
+            - position.follower_arm:wrist_roll
+            - position.follower_arm:gripper
+        publish:
+          topic: /joint_commands
+          type: sensor_msgs/msg/JointState
+          layout: flat
+          qos:
+            reliability: best_effort
+            history: keep_last
+            depth: 10
+          strategy:
+            mode: nearest
+            tolerance_ms: 500
+        safety_behavior: hold  # 'zeros' to send zeros, 'hold' to maintain last command
+
+    recording:
+      storage: mcap

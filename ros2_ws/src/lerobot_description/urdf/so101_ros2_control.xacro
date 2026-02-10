@@ -2,7 +2,6 @@
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
     <xacro:arg name="use_sim" default="true"/>
-    <xacro:arg name="use_cpp_plugin" default="false"/>
     <xacro:arg name="port" default="/dev/ttyACM0"/>
     <xacro:arg name="reset_positions" default=""/>
 
@@ -14,21 +13,12 @@
         </xacro:if>
 
         <xacro:unless value="$(arg use_sim)">
-            <xacro:if value="$(arg use_cpp_plugin)">
-                <hardware>
-                    <plugin>so101_hardware_cpp/SO101SystemHardware</plugin>
-                    <param name="port">$(arg port)</param>
-                    <param name="calib_file">$(env HOME)/.calibrate/so101_follower_calibrate.json</param>
-                    <param name="reset_positions">$(arg reset_positions)</param>
-                </hardware>
-            </xacro:if>
-            <xacro:unless value="$(arg use_cpp_plugin)">
-                <hardware>
-                    <plugin>topic_based_ros2_control/TopicBasedSystem</plugin>
-                    <param name="joint_commands_topic">/so101_follower/joint_commands</param>
-                    <param name="joint_states_topic">/so101_follower/joint_states</param>
-                </hardware>
-            </xacro:unless>
+            <hardware>
+                <plugin>so101_hardware/SO101SystemHardware</plugin>
+                <param name="port">$(arg port)</param>
+                <param name="calib_file">$(env HOME)/.calibrate/so101_follower_calibrate.json</param>
+                <param name="reset_positions">$(arg reset_positions)</param>
+            </hardware>
         </xacro:unless>
 
         <joint name="1">
@@ -37,9 +27,7 @@
                 <param name="max">2.0709</param>
             </command_interface>
             <state_interface name="position" />
-            <xacro:if value="$(arg use_cpp_plugin)">
-                <param name="id">1</param>
-            </xacro:if>
+            <param name="id">1</param>
         </joint>
 
         <joint name="2">
@@ -48,9 +36,7 @@
                 <param name="max">1.74533</param>
             </command_interface>
             <state_interface name="position" />
-            <xacro:if value="$(arg use_cpp_plugin)">
-                <param name="id">2</param>
-            </xacro:if>
+            <param name="id">2</param>
         </joint>
 
         <joint name="3">
@@ -59,9 +45,7 @@
                 <param name="max">1.6828</param>
             </command_interface>
             <state_interface name="position" />
-            <xacro:if value="$(arg use_cpp_plugin)">
-                <param name="id">3</param>
-            </xacro:if>
+            <param name="id">3</param>
         </joint>
 
         <joint name="4">
@@ -70,9 +54,7 @@
                 <param name="max">1.65806</param>
             </command_interface>
             <state_interface name="position" />
-            <xacro:if value="$(arg use_cpp_plugin)">
-                <param name="id">4</param>
-            </xacro:if>
+            <param name="id">4</param>
         </joint>
         <joint name="5">
             <command_interface name="position">
@@ -80,9 +62,7 @@
                 <param name="max">2.9115</param>
             </command_interface>
             <state_interface name="position" />
-            <xacro:if value="$(arg use_cpp_plugin)">
-                <param name="id">5</param>
-            </xacro:if>
+            <param name="id">5</param>
         </joint>
 
         <joint name="6">
@@ -91,9 +71,7 @@
                 <param name="max">1.0858</param>
             </command_interface>
             <state_interface name="position" />
-            <xacro:if value="$(arg use_cpp_plugin)">
-                <param name="id">6</param>
-            </xacro:if>
+            <param name="id">6</param>
         </joint>
     </ros2_control>
 
