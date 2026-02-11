@@ -69,7 +69,7 @@ ros2 run so101_hardware calibrate_arm --arm follower --port /dev/ttyACM0
 <hardware>
   <plugin>so101_hardware/SO101SystemHardware</plugin>
   <param name="port">/dev/ttyACM0</param>
-  <param name="calib_file">$(env HOME)/.calibrate/so101_follower.json</param>
+  <param name="calib_file">$(env HOME)/.calibrate/so101_follower_calibrate.json</param>
   <!-- 可选：启动时的安全姿态 (JSON 格式, 单位为弧度) -->
   <param name="reset_positions">{"1": 0.0, "2": 0.0}</param>
 </hardware>

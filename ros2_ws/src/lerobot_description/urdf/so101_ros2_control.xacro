@@ -3,6 +3,7 @@
 
     <xacro:arg name="use_sim" default="true"/>
     <xacro:arg name="port" default="/dev/ttyACM0"/>
+    <xacro:arg name="calib_file" default=""/>
     <xacro:arg name="reset_positions" default=""/>
 
     <ros2_control name="RobotSystem" type="system">
@@ -16,7 +17,7 @@
             <hardware>
                 <plugin>so101_hardware/SO101SystemHardware</plugin>
                 <param name="port">$(arg port)</param>
-                <param name="calib_file">$(env HOME)/.calibrate/so101_follower_calibrate.json</param>
+                <param name="calib_file">$(arg calib_file)</param>
                 <param name="reset_positions">$(arg reset_positions)</param>
             </hardware>
         </xacro:unless>

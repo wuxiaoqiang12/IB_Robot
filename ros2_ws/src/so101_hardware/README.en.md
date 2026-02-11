@@ -69,7 +69,7 @@ Specify the hardware interface in your URDF:
 <hardware>
   <plugin>so101_hardware/SO101SystemHardware</plugin>
   <param name="port">/dev/ttyACM0</param>
-  <param name="calib_file">$(env HOME)/.calibrate/so101_follower.json</param>
+  <param name="calib_file">$(env HOME)/.calibrate/so101_follower_calibrate.json</param>
   <!-- Optional: Safe startup positions (JSON format, radians) -->
   <param name="reset_positions">{"1": 0.0, "2": 0.0}</param>
 </hardware>

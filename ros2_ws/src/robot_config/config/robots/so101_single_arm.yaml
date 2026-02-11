@@ -13,12 +13,12 @@ robot:
     port: /dev/ttyACM0
     calib_file: $(env HOME)/.calibrate/so101_follower_calibrate.json
     # Reset positions (optional) - safe folded position for dog-mounted arm
-    reset_positions:
-      "1": 0.0813
-      "2": 3.7905
-      "3": 7.0379
-      "4": -0.6228
-      "5": 2.3869
+    # reset_positions:
+    #   "1": 0.0813
+    #   "2": 3.7905
+    #   "3": 7.0379
+    #   "4": -0.6228
+    #   "5": 2.3869
     urdf_path: $(find lerobot_description)/urdf/so101.urdf.xacro
 
   # Peripheral devices (cameras, microphones, etc.)
@@ -30,7 +30,7 @@ robot:
       width: 640
       height: 480
       fps: 30
-      pixel_format: bgr8
+      pixel_format: yuyv
       frame_id: camera_top_frame
       optical_frame_id: camera_top_optical_frame
       # Camera position relative to parent frame (base_link)
@@ -52,7 +52,7 @@ robot:
       width: 640
       height: 480
       fps: 60
-      pixel_format: bgr8
+      pixel_format: yuyv
       frame_id: camera_wrist_frame
       optical_frame_id: camera_wrist_optical_frame
       # Camera position relative to parent frame
@@ -66,6 +66,28 @@ robot:
         yaw: 0.0
       # camera_info_url: file://$(env HOME)/.ros/camera_info/wrist_camera.yaml
 
+    - type: camera
+      name: front
+      driver: realsense
+      serial_number: ""  # Optional: specific serial number
+      width: 640
+      height: 480
+      fps: 30
+      pixel_format: bgr8
+      enable_pointcloud: false
+      align_depth: true
+      frame_id: camera_front_link
+      optical_frame_id: camera_front_optical_frame
+      # Camera position relative to base_link
+      transform:
+        parent_frame: base_link
+        x: 0.1
+        y: 0.0
+        z: 0.2
+        roll: 0.0
+        pitch: 0.0
+        yaw: 0.0
+
   # Rosetta contract integration
   contract:
     base_contract: $(find rosetta)/contracts/act_grab_pan.yaml
@@ -73,6 +95,20 @@ robot:
     max_duration_s: 90.0
 
     observations:
+      - key: observation.images.front
+        topic: /camera/front
+        peripheral: front
+        image:
+          resize: [480, 640]
+        align:
+          strategy: hold
+          stamp: header
+          tol_ms: 1500
+        qos:
+          reliability: best_effort
+          history: keep_last
+          depth: 10
+
       - key: observation.images.top
         topic: /camera/top
         peripheral: top  # References camera 'top' from peripherals above

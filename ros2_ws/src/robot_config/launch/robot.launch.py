@@ -375,6 +375,11 @@ def generate_ros2_control_nodes(robot_config, use_sim):
 
     # Get hardware parameters
     port = ros2_control_config.get("port", "/dev/ttyACM0")
+    calib_file = ros2_control_config.get("calib_file", "")
+
+    # Resolve $(env HOME) in calib_file if present
+    if "$(env HOME)" in calib_file:
+        calib_file = calib_file.replace("$(env HOME)", os.environ.get("HOME", ""))
 
     # Generate robot_description using xacro
     xacro_args = [
@@ -387,6 +392,9 @@ def generate_ros2_control_nodes(robot_config, use_sim):
         " ",
         "port:=",
         port,
+        " ",
+        "calib_file:=",
+        calib_file,
     ]
 
     # Add use_cameras argument if cameras are configured

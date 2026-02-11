@@ -5,8 +5,8 @@ from typing import Dict
 
 # Default calibration paths
 CALIB_DIR = pathlib.Path.home() / ".calibrate"
-LEADER_CALIB_FILE = CALIB_DIR / "so101_leader.json"
-FOLLOWER_CALIB_FILE = CALIB_DIR / "so101_follower.json"
+LEADER_CALIB_FILE = CALIB_DIR / "so101_leader_calibrate.json"
+FOLLOWER_CALIB_FILE = CALIB_DIR / "so101_follower_calibrate.json"
 
 # Motor configurations
 MOTOR_COUNT = 6
