@@ -10,7 +10,7 @@
 #include "hardware_interface/types/hardware_interface_return_values.hpp"
 #include "rclcpp/macros.hpp"
 #include "rclcpp_lifecycle/state.hpp"
-#include "../FTServo_Linux/src/SMS_STS.h"
+#include "SMS_STS.h"
 
 namespace so101_hardware
 {

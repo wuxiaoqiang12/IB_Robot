@@ -19,28 +19,36 @@ find_package(rclcpp REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
 find_package(nlohmann_json REQUIRED)
 
-# ===== C++ Library =====
+# ===== Fetch Feetech SDK via CMake =====
+include(FetchContent)
+FetchContent_Declare(
+  ftservo_sdk_external
+  GIT_REPOSITORY https://github.com/ftservo/FTServo_Linux.git
+  GIT_TAG        main
+)
+FetchContent_MakeAvailable(ftservo_sdk_external)
 
-# Build Feetech SDK
+# Build Feetech SDK from fetched source
 add_library(ftservo_sdk STATIC
-  FTServo_Linux/src/SCS.cpp
-  FTServo_Linux/src/SCSCL.cpp
-  FTServo_Linux/src/HLSCL.cpp
-  FTServo_Linux/src/SMS_STS.cpp
-  FTServo_Linux/src/SCSerial.cpp
+  ${ftservo_sdk_external_SOURCE_DIR}/src/SCS.cpp
+  ${ftservo_sdk_external_SOURCE_DIR}/src/SCSCL.cpp
+  ${ftservo_sdk_external_SOURCE_DIR}/src/HLSCL.cpp
+  ${ftservo_sdk_external_SOURCE_DIR}/src/SMS_STS.cpp
+  ${ftservo_sdk_external_SOURCE_DIR}/src/SCSerial.cpp
 )
 set_target_properties(ftservo_sdk PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(ftservo_sdk PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/FTServo_Linux/src>
+  $<BUILD_INTERFACE:${ftservo_sdk_external_SOURCE_DIR}/src>
   $<INSTALL_INTERFACE:include>
 )
 
-# Build hardware interface plugin
+# ===== Build hardware interface plugin =====
 add_library(so101_hardware_interface SHARED
   src/so101_system_hardware.cpp
 )
 target_include_directories(so101_hardware_interface PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<BUILD_INTERFACE:${ftservo_sdk_external_SOURCE_DIR}/src>
   $<INSTALL_INTERFACE:include>
 )
 target_link_libraries(so101_hardware_interface ftservo_sdk)
