@@ -1,0 +1,29 @@
+{
+    "python.defaultInterpreterPath": "${workspaceFolder}/venv/bin/python3",
+    "python.analysis.extraPaths": [
+        "${workspaceFolder}/libs/lerobot",
+        "${workspaceFolder}/src",
+        "/opt/ros/humble/lib/python3.10/site-packages",
+        "${workspaceFolder}/venv/lib/python3.10/site-packages"
+    ],
+    "python.autoComplete.extraPaths": [
+        "/opt/ros/humble/lib/python3.10/site-packages",
+        "${workspaceFolder}/venv/lib/python3.10/site-packages"
+    ],
+    "terminal.integrated.env.linux": {
+        "PYTHONPATH": "${workspaceFolder}/libs/lerobot:${workspaceFolder}/venv/lib/python3.10/site-packages:/opt/ros/humble/lib/python3.10/site-packages:${PYTHONPATH}"
+    },
+    "files.associations": {
+        "*.repos": "yaml"
+    },
+    "search.exclude": {
+        "**/build": true,
+        "**/install": true,
+        "**/log": true,
+        "**/venv": true
+    },
+    "ros.distro": "humble",
+    "ros.setupSource": "/opt/ros/humble/setup.sh",
+    "rde.ros.distro": "humble",
+    "rde.ros.setupSource": "/opt/ros/humble/setup.sh"
+}

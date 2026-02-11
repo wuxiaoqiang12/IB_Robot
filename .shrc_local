@@ -1,0 +1,38 @@
+# ibrobot_ws 通用开发环境脚本 (支持 Bash & Zsh)
+# 使用方法: source .shrc_local
+
+# 1. 加载基础 ROS 2 环境
+if [ -f "/opt/ros/humble/setup.sh" ]; then
+    source /opt/ros/humble/setup.sh
+fi
+
+# 2. 激活虚拟环境
+if [ -f "venv/bin/activate" ]; then
+    source venv/bin/activate
+fi
+
+# 3. 设置 PYTHONPATH
+# 确保优先使用 venv 和 libs 中的源码，使用绝对路径以支持跨目录调用
+WORKSPACE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-${(%):-%x}}")" && pwd)"
+export PYTHONPATH="${WORKSPACE_DIR}/libs/lerobot:${WORKSPACE_DIR}/venv/lib/python3.10/site-packages:${PYTHONPATH}"
+
+# 4. 加载本地编译后的包 (如果已编译)
+if [ -f "${WORKSPACE_DIR}/install/setup.sh" ]; then
+    source "${WORKSPACE_DIR}/install/setup.sh"
+fi
+
+# 5. 别名设置
+alias cb='colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release'
+alias cbp='colcon build --symlink-install --packages-select'
+alias src='source install/setup.sh'
+
+# 6. 欢迎信息 (跨 Shell 颜色处理)
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+NC='\033[0m'
+
+# 检查是否为交互式 Shell
+if [[ $- == *i* ]]; then
+    echo -e "${GREEN}[ibrobot_ws]${NC} 环境已就绪！"
+    echo -e "常用指令: ${YELLOW}cb${NC} (编译全部), ${YELLOW}cbp${NC} (编译指定包), ${YELLOW}src${NC} (刷新环境)"
+fi
