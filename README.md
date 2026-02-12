@@ -13,7 +13,7 @@ IB Robot 是一个**智能融合机器人开发框架**，旨在打通 Hugging F
 | **数据流** | Episode 回合 | Topic 话题 | 契约驱动的双向转换 |
 | **时间观** | 离散时间步 | 连续时间流 | 时间对齐与插值平滑 |
 | **控制方式** | 端到端神经网络 | 分层控制架构 | Action Chunking 调度 |
-| **部署形态** | Python 脚本 | ROS2 节点 | 容器化微服务集群 |
+| **部署形态** | Python 脚本 | ROS2 节点 | 分布式端边协同部署 |
 
 ## 系统架构
 
@@ -21,7 +21,7 @@ IB Robot 是一个**智能融合机器人开发框架**，旨在打通 Hugging F
 
 ### 架构深度解析
 
-如上图所示，IB Robot 构建了一个从感知、决策到执行的端到端闭环体系，充分利用了 ROS 2 的实时通信能力与 LeRobot 的强大推理能力：
+如上图所示，IB Robot 构建了一个从感知、决策到执行的端到端闭环体系，充分利用了 ROS 2 的分布式部署、跨节点通信能力、机器人控制领域成熟的软硬件生态和 LeRobot 提供的丰富的具身模型、统一数据集格式、训练服务和推理服务等：
 
 1. **多模态感知与采集**:
    - **底层感知**: 通过 ROS 2 Driver 统一接入相机、雷达及麦克风，屏蔽硬件差异。
@@ -31,14 +31,17 @@ IB Robot 是一个**智能融合机器人开发框架**，旨在打通 Hugging F
    - 作为架构的枢纽，TensorMsg 负责 `ros_msg` 与 `tensor` 之间的双向实时转换，实现了机器学习世界与机器人控制世界的无缝对接。
 
 3. **推理与调度**:
-   - **Inference Service**: 支持各类 VLA（视觉-语言-动作）大模型（如 ACT, Pi0.5, SmolVLA）以及未来的 VLN（视觉语言导航）模型。
-   - **Action Dispatch**: 引入了**时序集成 (Temporal Ensembling)** 和**跨帧平滑**算法，有效解决大模型输出的高频抖动问题，并支持 RTC (Real-Time Control) 增强以提升实时性。
+   - **Inference Service**: 支持各类 VLA（视觉-语言-动作）大模型（如 ACT, Pi0.5, SmolVLA）以及 VLN（视觉语言导航）模型。
+   - **Action Dispatch**: 引入了**时序集成 (Temporal Ensembling)** 和**跨帧平滑**算法，有效解决大模型输出的高频抖动问题，并支持 RTC (Real-Time Chunking) 增强以提升实时性。
 
 4. **控制与执行**:
    - 利用 **ros2_control** 的 Hardware Interface 插件化架构，同一套控制逻辑可无缝分发至 **Gazebo/Isaac Sim/Mujoco** 仿真环境或 **So10x/LeKiwi/LeDog** 真实硬件。
 
 5. **数据总线扩展**:
    - 架构底层不仅支持标准的 ROS 2 DDS，还为集成 **AGIROS、DORA、AimRT** 等高性能数据总线预留了扩展接口。
+
+6. **LeRobot 生态赋能**:
+   - 充分利用 LeRobot 提供的丰富**具身智能策略模型库** (ACT, Diffusion, VLA 等) 及**统一的数据集格式**，实现了从数据采集到模型训练、再到推理服务的高效闭环。通过标准化的训练服务与解耦的推理节点，极大地降低了算法迁移与部署的门槛。
 
 ---
 
