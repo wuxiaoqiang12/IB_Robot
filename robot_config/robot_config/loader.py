@@ -95,7 +95,7 @@ def load_ros2_control_config(data: Dict[str, Any], config_dir: Optional[Path] = 
       port: /dev/ttyACM0
       calib_file: $(env HOME)/.calibrate/so101_follower_calibrate.json
       reset_positions: {1: 0.0, 2: 0.0}
-      urdf_path: $(find lerobot_description)/urdf/so101.urdf.xacro
+      urdf_path: $(find robot_description)/urdf/lerobot/so101/so101.urdf.xacro
     ```
     """
     params = {}

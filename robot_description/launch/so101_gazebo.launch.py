@@ -13,10 +13,10 @@ from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
-    lerobot_description = get_package_share_directory("lerobot_description")
+    robot_description = get_package_share_directory("robot_description")
 
     model_arg = DeclareLaunchArgument(name="model", default_value=os.path.join(
-                                        lerobot_description, "urdf", "so101.urdf.xacro"
+                                        robot_description, "urdf", "lerobot", "so101", "so101.urdf.xacro"
                                         ),
                                       description="Absolute path to robot urdf file"
     )
@@ -30,7 +30,7 @@ def generate_launch_description():
     gazebo_resource_path = SetEnvironmentVariable(
         name="GZ_SIM_RESOURCE_PATH",
         value=[
-            str(Path(lerobot_description).parent.resolve())
+            str(Path(robot_description).parent.resolve())
             ]
     )
 

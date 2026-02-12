@@ -197,7 +197,7 @@ def generate_gazebo_nodes(robot_config, urdf_path):
 
     # Set Gazebo resource path
     try:
-        lerobot_desc_share = get_package_share_directory("lerobot_description")
+        lerobot_desc_share = get_package_share_directory("robot_description")
         import os
         gazebo_resource_path = SetEnvironmentVariable(
             name="GZ_SIM_RESOURCE_PATH",
@@ -205,7 +205,7 @@ def generate_gazebo_nodes(robot_config, urdf_path):
         )
         actions.append(gazebo_resource_path)
     except:
-        print("[robot_config] WARNING: Could not find lerobot_description package")
+        print("[robot_config] WARNING: Could not find robot_description package")
 
     # Get world file path (use custom world with Sensors plugin)
     try:

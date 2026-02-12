@@ -14,7 +14,7 @@ robot:
     # This example assumes a single plugin managing both arms
     port: /dev/ttyACM0
     calib_file: $(env HOME)/.calibrate/so101_dual_calibrate.json
-    urdf_path: $(find lerobot_description)/urdf/so101_dual.urdf.xacro
+    urdf_path: $(find robot_description)/urdf/lerobot/so101/so101_dual.urdf.xacro
 
   # Peripheral devices (cameras, microphones, etc.)
   peripherals:

@@ -20,7 +20,7 @@ def generate_launch_description():
     # Parameter for which joint_states topic to use
     joint_states_topic = LaunchConfiguration('joint_states_topic')
 
-    maxarm_description_dir = get_package_share_directory("lerobot_description")
+    maxarm_description_dir = get_package_share_directory("robot_description")
 
     model_arg = DeclareLaunchArgument(
         name="model", 
