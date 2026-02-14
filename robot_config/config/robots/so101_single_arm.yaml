@@ -22,6 +22,17 @@ robot:
     #   "5": 2.3869
     urdf_path: $(find robot_description)/urdf/lerobot/so101/so101.urdf.xacro
 
+    # Controllers configuration
+    # Path to the controllers configuration file (YAML format)
+    controllers_config: $(find so101_hardware)/config/so101_controllers.yaml
+
+    # List of controllers to auto-start
+    # These controllers will be automatically spawned when the robot launches
+    controllers:
+      - joint_state_broadcaster  # Publishes joint states to /joint_states
+      - arm_controller           # Controls the robot arm joints
+      - gripper_controller       # Controls the gripper
+
   # Peripheral devices (cameras, microphones, etc.)
   peripherals:
     - type: camera

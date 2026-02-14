@@ -6,9 +6,21 @@ This launch file loads robot configuration from YAML and dynamically generates:
 - Camera drivers (usb_cam, realsense2_camera)
 - Static TF publishers for camera frames
 
+Controllers are automatically spawned in both simulation and real hardware modes:
+- Simulation mode: Uses Gazebo's gz_ros2_control plugin for controller_manager
+- Hardware mode: Starts ros2_control_node for controller_manager
+
 Usage:
     ros2 launch robot_config robot.launch.py robot_config:=test_cam use_sim:=false
     ros2 launch robot_config robot.launch.py robot_config:=so101_single_arm use_sim:=false
+    ros2 launch robot_config robot.launch.py robot_config:=so101_single_arm use_sim:=true
+    ros2 launch robot_config robot.launch.py robot_config:=so101_single_arm use_sim:=true auto_start_controllers:=false
+
+Launch Arguments:
+    robot_config: Robot configuration name (default: test_cam)
+    config_path: Optional full path to robot config file
+    use_sim: Use simulation mode (default: false)
+    auto_start_controllers: Automatically spawn controllers (default: true, set to false for debugging)
 """
 
 import os
@@ -28,6 +40,102 @@ from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitut
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 from launch_ros.parameter_descriptions import ParameterValue
+
+
+def resolve_ros_path(path):
+    """Resolve ROS-style path substitutions like $(find pkg) and $(env VAR).
+
+    Handles ROS path substitution syntax:
+    - $(find package_name): Resolves to package share directory
+    - $(env VAR_NAME): Resolves to environment variable value
+
+    Args:
+        path: Path string that may contain $(find package) or $(env VAR)
+
+    Returns:
+        Resolved path string. Returns original path if it's None or empty.
+
+    Example:
+        >>> resolve_ros_path("$(find so101_hardware)/config/controllers.yaml")
+        "/home/user/workspace/install/share/so101_hardware/config/controllers.yaml"
+
+        >>> resolve_ros_path("$(env HOME)/.config/robot.yaml")
+        "/home/user/.config/robot.yaml"
+    """
+    if not path:
+        return path
+
+    import re
+
+    # Resolve $(find package)
+    find_pattern = re.compile(r'\$\(find\s+(\w+)\)')
+    for match in find_pattern.finditer(path):
+        pkg_name = match.group(1)
+        try:
+            pkg_path = get_package_share_directory(pkg_name)
+            path = path.replace(f"$(find {pkg_name})", pkg_path)
+        except Exception as e:
+            print(f"[robot_config] WARNING: Could not find package '{pkg_name}': {e}")
+
+    # Resolve $(env VAR)
+    env_pattern = re.compile(r'\$\(env\s+(\w+)\)')
+    for match in env_pattern.finditer(path):
+        var_name = match.group(1)
+        var_value = os.environ.get(var_name, "")
+        path = path.replace(f"$(env {var_name})", var_value)
+        if not var_value:
+            print(f"[robot_config] WARNING: Environment variable '{var_name}' is not set or empty")
+
+    return path
+
+
+def parse_bool(value, default=False):
+    """Parse various value types to boolean with robust handling.
+
+    Handles multiple input formats:
+    - Strings: "true", "TRUE", "True", "1", "yes", "on" -> True
+    - Strings: "false", "FALSE", "False", "0", "no", "off" -> False
+    - Booleans: True/False -> as-is
+    - Numbers: 1/0 -> True/False
+    - None: -> default value
+
+    Args:
+        value: Input value to parse (string, bool, int, or None)
+        default: Default value if input is None or unparseable
+
+    Returns:
+        Boolean value
+
+    Example:
+        >>> parse_bool("true")
+        True
+        >>> parse_bool("FALSE")
+        False
+        >>> parse_bool(True)
+        True
+        >>> parse_bool(None, default=False)
+        False
+    """
+    if value is None:
+        return default
+
+    # Handle boolean types directly
+    if isinstance(value, bool):
+        return value
+
+    # Convert to string and normalize
+    str_value = str(value).strip().lower()
+
+    # Check for true-like values
+    if str_value in ('true', '1', 'yes', 'on'):
+        return True
+
+    # Check for false-like values
+    if str_value in ('false', '0', 'no', 'off', ''):
+        return False
+
+    # Unknown value, return default
+    return default
 
 
 def load_robot_config(robot_config_name, config_path_override=None):
@@ -71,15 +179,18 @@ def generate_camera_nodes(robot_config, use_sim):
 
     Args:
         robot_config: Robot configuration dict
-        use_sim: Simulation mode flag
+        use_sim: Simulation mode flag (string or bool)
 
     Returns:
         List of Node actions for cameras
     """
+    # Convert to boolean for robust comparison
+    is_sim = parse_bool(use_sim, default=False)
+
     nodes = []
 
     # Skip cameras in simulation mode
-    if use_sim == 'true':
+    if is_sim:
         print("[robot_config] Simulation mode: skipping camera nodes")
         return nodes
 
@@ -311,16 +422,21 @@ def generate_gazebo_nodes(robot_config, urdf_path):
     return actions
 
 
-def generate_ros2_control_nodes(robot_config, use_sim):
+def generate_ros2_control_nodes(robot_config, use_sim, auto_start_controllers='true'):
     """Generate ros2_control nodes from configuration.
 
     Args:
         robot_config: Robot configuration dict
-        use_sim: Simulation mode flag
+        use_sim: Simulation mode flag (string or bool)
+        auto_start_controllers: Whether to automatically start controllers (string or bool)
 
     Returns:
         List of Node actions for ros2_control
     """
+    # Convert string parameters to boolean for robust comparison
+    is_sim = parse_bool(use_sim, default=False)
+    is_auto_start = parse_bool(auto_start_controllers, default=True)
+
     nodes = []
     ros2_control_config = robot_config.get("ros2_control")
 
@@ -336,28 +452,8 @@ def generate_ros2_control_nodes(robot_config, use_sim):
         print("[robot_config] WARNING: No urdf_path specified in ros2_control config")
         return nodes
 
-    # Resolve $(find package) and $(env VAR) substitutions
-    if "$(find " in urdf_path:
-        # Extract package name from $(find package_name)/path
-        import re
-        match = re.search(r'\$\(find\s+(\w+)\)', urdf_path)
-        if match:
-            package_name = match.group(1)
-            try:
-                pkg_share = get_package_share_directory(package_name)
-                urdf_path = urdf_path.replace(f"$(find {package_name})", pkg_share)
-            except:
-                print(f"[robot_config] ERROR: Could not find package {package_name}")
-                return nodes
-
-    if "$(env " in urdf_path:
-        # Replace $(env VAR) with environment variable
-        import re
-        match = re.search(r'\$\(env\s+(\w+)\)', urdf_path)
-        if match:
-            var_name = match.group(1)
-            var_value = os.environ.get(var_name, "")
-            urdf_path = urdf_path.replace(f"$(env {var_name})", var_value)
+    # Resolve ROS path substitutions $(find package) and $(env VAR)
+    urdf_path = resolve_ros_path(urdf_path)
 
     print(f"[robot_config] URDF path: {urdf_path}")
 
@@ -377,9 +473,8 @@ def generate_ros2_control_nodes(robot_config, use_sim):
     port = ros2_control_config.get("port", "/dev/ttyACM0")
     calib_file = ros2_control_config.get("calib_file", "")
 
-    # Resolve $(env HOME) in calib_file if present
-    if "$(env HOME)" in calib_file:
-        calib_file = calib_file.replace("$(env HOME)", os.environ.get("HOME", ""))
+    # Resolve ROS path substitutions in calib_file
+    calib_file = resolve_ros_path(calib_file)
 
     # Generate robot_description using xacro
     xacro_args = [
@@ -388,7 +483,7 @@ def generate_ros2_control_nodes(robot_config, use_sim):
         urdf_path,
         " ",
         "use_sim:=",
-        "true" if use_sim == 'true' else "false",
+        "true" if is_sim else "false",
         " ",
         "port:=",
         port,
@@ -411,7 +506,7 @@ def generate_ros2_control_nodes(robot_config, use_sim):
     robot_description = {"robot_description": robot_description_content}
 
     # Add use_sim_time for simulation
-    if use_sim == 'true':
+    if is_sim:
         robot_description["use_sim_time"] = True
 
     # Robot State Publisher
@@ -424,69 +519,124 @@ def generate_ros2_control_nodes(robot_config, use_sim):
 
     # In simulation mode: Gazebo's gz_ros2_control plugin handles hardware and controllers
     # In real hardware mode: Start ros2_control_node and spawners
-    if use_sim != 'true':
+    # Read controller configuration from YAML
+    controller_names = ros2_control_config.get("controllers", [])
+
+    # Resolve ROS path substitutions in controllers_config
+    controllers_config = resolve_ros_path(ros2_control_config.get("controllers_config"))
+
+    if not is_sim:
+        # Real hardware mode
         print("[robot_config] Real hardware mode: starting ros2_control_node and controller spawners")
 
-        hardware_plugin = ros2_control_config.get("hardware_plugin", "")
-        controllers_config = ros2_control_config.get("controllers_config")
-
+        # Check for required configuration
         if not controllers_config:
-            # Try to find default controllers config based on robot type
-            if "so101" in hardware_plugin.lower():
-                try:
-                    so101_hw_share = get_package_share_directory("so101_hardware")
-                    controllers_config = os.path.join(so101_hw_share, "config", "so101_controllers.yaml")
-                except:
-                    print("[robot_config] WARNING: Could not find so101_hardware package for controllers config")
+            print("[robot_config] WARNING: No controllers_config specified in robot configuration YAML")
+            print("[robot_config] Please add 'controllers_config' under 'ros2_control' section")
+            print("[robot_config] Example: controllers_config: $(find package_name)/config/controllers.yaml")
+
+        if not controller_names:
+            print("[robot_config] WARNING: No controllers list specified in robot configuration YAML")
+            print("[robot_config] Please add 'controllers' list under 'ros2_control' section")
+            print("[robot_config] Example:")
+            print("[robot_config]   controllers:")
+            print("[robot_config]     - joint_state_broadcaster")
+            print("[robot_config]     - arm_controller")
 
         if controllers_config and Path(controllers_config).exists():
             print(f"[robot_config] Controllers config: {controllers_config}")
+            print(f"[robot_config] Controllers to spawn: {controller_names}")
 
-            control_node_params = [controllers_config]
-            if use_sim == 'true':
-                control_node_params.append({"use_sim_time": True})
-
+            # Start ros2_control_node (provides controller_manager)
             nodes.append(Node(
                 package="controller_manager",
                 executable="ros2_control_node",
-                parameters=control_node_params,
+                parameters=[controllers_config],
                 remappings=[
                     ("~/robot_description", "/robot_description"),
                 ],
                 output="screen",
             ))
 
-            # Spawn joint_state_broadcaster
-            nodes.append(Node(
-                package="controller_manager",
-                executable="spawner",
-                arguments=[
-                    "joint_state_broadcaster",
-                    "--controller-manager",
-                    "/controller_manager",
-                ],
-            ))
-
-            # Spawn arm_controller
-            nodes.append(Node(
-                package="controller_manager",
-                executable="spawner",
-                arguments=["arm_controller", "--controller-manager", "/controller_manager"],
-            ))
-
-            # Spawn gripper_controller
-            nodes.append(Node(
-                package="controller_manager",
-                executable="spawner",
-                arguments=["gripper_controller", "--controller-manager", "/controller_manager"],
-            ))
+            # Spawn controllers if auto_start_controllers is enabled
+            if is_auto_start and controller_names:
+                spawners = generate_controller_spawners(controller_names, use_sim=False, controller_manager_name="controller_manager")
+                nodes.extend(spawners)
+                print(f"[robot_config] Added {len(spawners)} controller spawners (hardware mode, 10s timeout)")
+            else:
+                print("[robot_config] Skipping controller auto-start (auto_start_controllers=false or no controllers specified)")
         else:
-            print(f"[robot_config] WARNING: Controllers config not found at {controllers_config}")
+            print(f"[robot_config] ERROR: Controllers config not found at {controllers_config}")
+            print(f"[robot_config] Cannot start ros2_control_node without valid config")
     else:
-        print("[robot_config] Simulation mode: Gazebo's gz_ros2_control will handle controllers")
+        # Simulation mode
+        print("[robot_config] Simulation mode: Gazebo's gz_ros2_control provides controller_manager")
+        print(f"[robot_config] Controllers to spawn: {controller_names}")
+
+        # Spawn controllers if auto_start_controllers is enabled
+        if is_auto_start and controller_names:
+            spawners = generate_controller_spawners(controller_names, use_sim=True, controller_manager_name="controller_manager")
+            nodes.extend(spawners)
+            print(f"[robot_config] Added {len(spawners)} controller spawners (simulation mode, 30s timeout, use_sim_time=True)")
+        else:
+            if not controller_names:
+                print("[robot_config] WARNING: No controllers list specified in robot configuration YAML")
+            print("[robot_config] Skipping controller auto-start (auto_start_controllers=false or no controllers specified)")
 
     print(f"[robot_config] Created {len(nodes)} ros2_control nodes")
     return nodes
+
+
+def generate_controller_spawners(controller_names, use_sim=False, controller_manager_name="controller_manager"):
+    """Generate controller spawner nodes.
+
+    Dynamically creates spawners for the specified controllers.
+
+    Args:
+        controller_names: List of controller names to spawn (e.g., ["joint_state_broadcaster", "arm_controller"])
+        use_sim: Whether in simulation mode
+                 - True: Adds use_sim_time parameter, 30s timeout (for Gazebo initialization)
+                 - False: No use_sim_time, 10s timeout (for hardware initialization)
+        controller_manager_name: Name of controller_manager
+                 - Uses relative name "controller_manager" by default (supports ROS 2 namespaces)
+                 - In GroupAction with namespace, auto-resolves to /namespace/controller_manager
+                 - Supports future multi-arm configurations (e.g., "left_arm/controller_manager")
+
+    Returns:
+        List of Node actions for controller spawners
+
+    Note:
+        - Simulation mode requires use_sim_time=True for proper TF synchronization with Gazebo clock
+        - Timeout values are tuned for different scenarios:
+          * 30s (sim): Accounts for Gazebo startup on low-spec machines
+          * 10s (hardware): Prevents indefinite hanging while allowing slow hardware init
+    """
+    spawners = []
+
+    # Simulation mode parameters
+    sim_params = {"use_sim_time": True} if use_sim else {}
+
+    # Timeout parameters: simulation needs longer wait time, hardware mode also needs appropriate timeout
+    if use_sim:
+        timeout_args = ["--controller-manager-timeout", "30"]
+    else:
+        timeout_args = ["--controller-manager-timeout", "10"]  # Shorter timeout for hardware mode
+
+    # Spawn controllers dynamically based on configuration
+    for controller_name in controller_names:
+        spawners.append(Node(
+            package="controller_manager",
+            executable="spawner",
+            name=f"spawner_{controller_name}",  # Explicit naming for easier debugging
+            arguments=[
+                controller_name,
+                "--controller-manager", controller_manager_name,
+                *timeout_args
+            ],
+            parameters=[sim_params] if sim_params else [],
+        ))
+
+    return spawners
 
 
 def generate_tf_nodes(robot_config):
@@ -568,11 +718,13 @@ def launch_setup(context, *args, **kwargs):
     robot_config_name = context.launch_configurations.get('robot_config', 'test_cam')
     config_path_override = context.launch_configurations.get('config_path', '')
     use_sim = context.launch_configurations.get('use_sim', 'false')
+    auto_start_controllers = context.launch_configurations.get('auto_start_controllers', 'true')
 
     print(f"[robot_config] Launch setup with:")
     print(f"[robot_config]   robot_config: {robot_config_name}")
     print(f"[robot_config]   config_path: {config_path_override if config_path_override else '(none)'}")
     print(f"[robot_config]   use_sim: {use_sim}")
+    print(f"[robot_config]   auto_start_controllers: {auto_start_controllers}")
 
     # Load robot configuration
     try:
@@ -583,30 +735,21 @@ def launch_setup(context, *args, **kwargs):
 
     # ========== ros2_control Nodes ==========
     try:
-        ros2_control_nodes = generate_ros2_control_nodes(robot_config, use_sim)
+        ros2_control_nodes = generate_ros2_control_nodes(robot_config, use_sim, auto_start_controllers)
         actions.extend(ros2_control_nodes)
     except Exception as e:
         print(f"[robot_config] ERROR generating ros2_control nodes: {e}")
         raise
 
     # ========== Gazebo Nodes (only in simulation mode) ==========
-    if use_sim == 'true':
+    if parse_bool(use_sim, default=False):
         try:
             # Get URDF path for Gazebo
             ros2_control_config = robot_config.get("ros2_control", {})
             urdf_path = ros2_control_config.get("urdf_path", "")
 
-            # Resolve path substitutions
-            if urdf_path and "$(find " in urdf_path:
-                import re
-                match = re.search(r'\$\(find\s+(\w+)\)', urdf_path)
-                if match:
-                    package_name = match.group(1)
-                    try:
-                        pkg_share = get_package_share_directory(package_name)
-                        urdf_path = urdf_path.replace(f"$(find {package_name})", pkg_share)
-                    except:
-                        urdf_path = ""
+            # Resolve ROS path substitutions
+            urdf_path = resolve_ros_path(urdf_path)
 
             if urdf_path:
                 gazebo_nodes = generate_gazebo_nodes(robot_config, urdf_path)
@@ -653,6 +796,11 @@ def generate_launch_description():
             "use_sim",
             default_value="false",
             description="Use simulation mode (skip camera nodes)",
+        ),
+        DeclareLaunchArgument(
+            "auto_start_controllers",
+            default_value="true",
+            description="Automatically spawn controllers (set to false for debugging)",
         ),
         OpaqueFunction(function=launch_setup),
     ])
