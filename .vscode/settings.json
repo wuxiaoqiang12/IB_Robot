@@ -4,14 +4,16 @@
         "${workspaceFolder}/libs/lerobot",
         "${workspaceFolder}/src",
         "/opt/ros/humble/lib/python3.10/site-packages",
+        "/opt/ros/humble/local/lib/python3.10/dist-packages",
         "${workspaceFolder}/venv/lib/python3.10/site-packages"
     ],
     "python.autoComplete.extraPaths": [
         "/opt/ros/humble/lib/python3.10/site-packages",
+        "/opt/ros/humble/local/lib/python3.10/dist-packages",
         "${workspaceFolder}/venv/lib/python3.10/site-packages"
     ],
     "terminal.integrated.env.linux": {
-        "PYTHONPATH": "${workspaceFolder}/libs/lerobot:${workspaceFolder}/venv/lib/python3.10/site-packages:/opt/ros/humble/lib/python3.10/site-packages:${PYTHONPATH}"
+        "PYTHONPATH": "${workspaceFolder}/libs/lerobot:${workspaceFolder}/src:/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages:${PYTHONPATH}"
     },
     "files.associations": {
         "*.repos": "yaml"
