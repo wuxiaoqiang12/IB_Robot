@@ -1,72 +1,45 @@
-# IB Robot
+# IB-Robot
 
-> 融合 LeRobot 与 ROS2 生态的智能机器人开发框架
+> IB-Robot (Intelligence Boom Robot): 融合 LeRobot 与 ROS 2 生态的智能具身机器人开发框架
 
 ## 项目定位
 
-IB Robot 是一个**智能融合机器人开发框架**，旨在打通 Hugging Face LeRobot 机器学习生态与 ROS2 机器人中间件之间的壁垒，为具身智能研发提供完整的工具链。
+IB-Robot 是一个**智能融合机器人开发框架**，旨在打通 Hugging Face LeRobot 机器学习生态与 ROS 2 机器人中间件之间的壁垒，为具身智能研发提供从采集、训练到部署的完整工具链。
 
 ### 核心融合能力
 
-| 维度 | LeRobot 生态 | ROS2 生态 | IB Robot 融合方案 |
+| 维度 | LeRobot 生态 | ROS 2 生态 | IB-Robot 融合方案 |
 |------|-------------|-----------|------------------|
-| **数据流** | Episode 回合 | Topic 话题 | 契约驱动的双向转换 |
-| **时间观** | 离散时间步 | 连续时间流 | 时间对齐与插值平滑 |
-| **控制方式** | 端到端神经网络 | 分层控制架构 | Action Chunking 调度 |
-| **部署形态** | Python 脚本 | ROS2 节点 | 分布式端边协同部署 |
+| **数据流** | Episode 回合 | Topic 话题 | 契约驱动的双向实时转换 |
+| **时间观** | 离散时间步 (Steps) | 连续时间流 (RT) | 自动对齐与高频插值平滑 |
+| **控制方式** | 端到端神经网络模型 | 分层规划控制架构 | **双模控制 (ACT vs MoveIt)** |
+| **部署形态** | Python 脚本 | ROS 2 节点 | 分布式端边协同部署 |
 
 ## 系统架构
 
-![IB Robot 架构图](docs/pictures/architecture.png)
+![IB-Robot 架构图](docs/pictures/architecture.png)
 
 ### 架构深度解析
 
-如上图所示，IB Robot 构建了一个从感知、决策到执行的端到端闭环体系，充分利用了 ROS 2 的分布式部署、跨节点通信能力、机器人控制领域成熟的软硬件生态和 LeRobot 提供的丰富的具身模型、统一数据集格式、训练服务和推理服务等：
+IB-Robot 构建了一个从感知、决策到执行的端到端闭环体系，实现了机器学习世界与机器人控制世界的无缝对接：
 
 1. **多模态感知与采集**:
-   - **底层感知**: 通过 ROS 2 Driver 统一接入相机、雷达及麦克风，屏蔽硬件差异。
-   - **多样化采集**: 支持 **VR 手柄、Xbox 控制器及手机 IMU** 等多种遥操作设备，采集的数据经过预处理后，由 **TensorMsg** 转换为 LeRobot 标准格式。
+   - **底层感知**: 通过 ROS 2 Driver 统一接入多路相机 (USB/RealSense)、雷达及麦克风。
+   - **多样化采集**: 支持 **VR 手柄、Xbox 控制器及手机 IMU** 等遥操作设备，为模仿学习提供专家示范数据。
 
-2. **核心中间件 (TensorMsg)**:
-   - 作为架构的枢纽，TensorMsg 负责 `ros_msg` 与 `tensor` 之间的双向实时转换，实现了机器学习世界与机器人控制世界的无缝对接。
+2. **协议转换枢纽 (tensormsg)**:
+   - 作为架构的枢纽，tensormsg 负责 `ros_msg` 与 `tensor` 之间的双向转换，通过合约（Contract）机制保证数据流的类型安全与一致性。
 
-3. **推理与调度**:
-   - **Inference Service**: 支持各类 VLA（视觉-语言-动作）大模型（如 ACT, Pi0.5, SmolVLA）以及 VLN（视觉语言导航）模型。
-   - **Action Dispatch**: 引入了**时序集成 (Temporal Ensembling)** 和**跨帧平滑**算法，有效解决大模型输出的高频抖动问题，并支持 RTC (Real-Time Chunking) 增强以提升实时性。
+3. **推理与研发服务 (Inference Service)**:
+   - 支持各类 VLA（视觉-语言-动作）大模型（如 SmolVLA, Pi0.5）以及端到端策略模型（如 ACT, Diffusion Policy）。
 
-4. **控制与执行**:
-   - 利用 **ros2_control** 的 Hardware Interface 插件化架构，同一套控制逻辑可无缝分发至 **Gazebo/Isaac Sim/Mujoco** 仿真环境或 **So10x/LeKiwi/LeDog** 真实硬件。
+4. **统一动作执行器 (Action Dispatch)**:
+   - 充当机器人的“小脑”。在 ACT 模式下负责 Action Chunking 调度与高频插值；在规划模式下对接 MoveIt 2 执行受限轨迹，并提供统一的 `RobotStatus` 汇报。
 
-5. **数据总线扩展**:
-   - 架构底层不仅支持标准的 ROS 2 DDS，还为集成 **AGIROS、DORA、AimRT** 等高性能数据总线预留了扩展接口。
-
-6. **LeRobot 生态赋能**:
-   - 充分利用 LeRobot 提供的丰富**具身智能策略模型库** (ACT, Diffusion, VLA 等) 及**统一的数据集格式**，实现了从数据采集到模型训练、再到推理服务的高效闭环。通过标准化的训练服务与解耦的推理节点，极大地降低了算法迁移与部署的门槛。
+5. **配置驱动中心 (robot_config)**:
+   - 实现“规格驱动本体行为”。通过单一 YAML 定义关节、控制器模式及传感器外参，支持一键切换仿真与实机环境。
 
 ---
-
-### 功能实现状态
-
-#### ✅ 已核心实现 (Core Features)
-
-| 模块 | 功能点 | 说明 |
-|------|-------|------|
-| **robot_config** | 系统总控 | 统一管理 URDF、参数及启动流程，支持一键切换 Sim/Real |
-| **inference_service** | VLA 推理 | 支持 ACT, Diffusion, VQ-BeT, SmolVLA 等策略的高效推理 |
-| **action_dispatch** | 动作调度 | 实现基础 Action Chunking 及线性插值平滑 |
-| **tensormsg** | 协议桥接 | 实现 LeRobot 契约与 ROS 2 话题的严格对齐与转换 |
-| **so101_hardware** | 实机驱动 | 基于 `FetchContent` 集成飞特舵机 SDK，稳定控制 SO-101 |
-| **仿真环境** | Gazebo 支持 | 提供完整的物理仿真环境与传感器模拟 |
-
-#### 🚧 规划与开发中 (Roadmap)
-
-| 模块 | 规划功能 | 预期目标 |
-|------|---------|----------|
-| **数据采集** | 多源遥操作 | 增加对 VR 设备及手机 IMU 的遥操作支持 (目前仅支持基础数据流) |
-| **动作分发** | 高级平滑 | 实现更复杂的**时序集成 (Temporal Ensembling)** 算法以提升动作细腻度 |
-| **导航集成** | VLN & Nav2 | 融合视觉语言导航与 ROS 2 Nav2 导航栈，实现移动操作 |
-| **中间件扩展** | 多总线支持 | 探索对 AGIROS / DORA / AimRT 等高性能数据总线的支持 |
-| **仿真扩展** | Isaac Sim | 适配 NVIDIA Isaac Sim 以支持大规模强化学习训练 |
 
 ## 仓库结构
 
@@ -79,31 +52,35 @@ IB_Robot/                           # 主工作空间 (本仓库)
 ├── libs/                           # 外部依赖库
 │   └── lerobot/                    # [子模块] LeRobot 训练框架
 │
-├── src/                            # [子模块] ROS2 包集合 (核心源码)
-│   ├── robot_config/               # 系统总控与启动入口
-│   ├── inference_service/          # 多模型推理服务
-│   ├── action_dispatch/            # 动作调度与平滑
-│   ├── tensormsg/                  # LeRobot ↔ ROS2 协议转换 (原 rosetta)
-│   ├── so101_hardware/             # SO-101 硬件驱动
-│   ├── lerobot_description/        # URDF 与仿真配置
-│   ├── tensormsg_interfaces/       # 消息/服务/动作定义 (原 rosetta_interfaces)
+├── src/                            # [子模块] 核心源码包集合
+│   ├── robot_config/               # 系统总控、规格定义与启动入口
+│   ├── action_dispatch/            # 统一动作执行器 (双模支持)
+│   ├── tensormsg/                  # LeRobot ↔ ROS 2 协议转换枢纽
+│   ├── robot_description/          # 统一机器人 URDF/SRDF 模型描述
+│   ├── robot_moveit/               # MoveIt 2 运动规划集成
+│   ├── inference_service/          # 多模型推理与部署服务
+│   ├── so101_hardware/             # SO-101 电机驱动接口
+│   ├── robot_interface/            # [已废弃] 机器人适配抽象层 (由 robot_config 替代)
+│   ├── tensormsg_interfaces/       # [已废弃] 系统统一接口定义 (由各模块内部定义替代)
 │   └── workflows/                  # CI/CD 配置
 │
-├── docs/                           # 文档
-│   ├── architecture.md            # 架构详细说明
-│   └── pictures/                  # 图片资源
-│
+├── docs/                           # 深度架构文档与开发指南
+├── scripts/                        # 环境配置与验证工具脚本
 └── build/                          # 编译输出 (自动创建)
 ```
 
 ## 快速开始
 
+### 0. 环境准备 (重要)
+- **系统**: Ubuntu 22.04 + ROS 2 Humble
+- **Python**: 系统原生 **Python 3.10** (严禁在活跃的 Conda 环境中运行)
+
 ### 1. 编译项目
 
-本项目使用 Git 子模块管理，请使用提供的脚本一键初始化：
+使用一键脚本初始化环境并编译：
 
 ```bash
-# 初始化环境、拉取子模块、安装依赖
+# 初始化子模块、安装依赖、配置 venv
 ./scripts/setup.sh
 
 # 编译工作空间
@@ -112,31 +89,37 @@ IB_Robot/                           # 主工作空间 (本仓库)
 
 ### 2. 运行项目
 
-**启动仿真（无需硬件）：**
+**启动仿真控制模式 (MoveIt 规划模式)：**
 
 ```bash
 source install/setup.sh
 ros2 launch robot_config robot.launch.py \
-    robot_name:=so101_single_arm \
-    use_sim:=true
+    robot_config:=so101_single_arm \
+    use_sim:=true \
+    control_mode:=moveit_planning
 ```
 
-**连接实机：**
+**启动 ACT 实时推理模式 (实机)：**
 
 ```bash
-# 确保 SO-101 机械臂已连接并上电
+# 确保硬件已连接
 source install/setup.sh
 ros2 launch robot_config robot.launch.py \
-    robot_name:=so101_single_arm \
-    use_sim:=false
+    robot_config:=so101_single_arm \
+    control_mode:=teleop_act
 ```
-
-## 许可证
-
-本项目采用 [Apache License 2.0](LICENSE)。
 
 ---
 
-**维护者**: IB Robot Team  
-**项目地址**: https://gitcode.com/openeuler/IB_Robot  
-**问题反馈**: https://gitcode.com/openeuler/IB_Robot/issues
+## 路线图 (Roadmap)
+
+- [x] **双模控制引擎**: 完美集成 ACT 流式控制与 MoveIt 轨迹控制。
+- [x] **配置一致性校验**: 引入 `validate_config` 工具防止配置漂移。
+- [ ] **多机器人协同**: 支持双臂及移动底座的规格化定义。
+- [ ] **在线数据回流**: 实现从演示采集到自动导出 LeRobot 数据集的闭环。
+
+---
+
+**维护者**: IB-Robot Team  
+**项目地址**: https://gitcode.com/BreezeWu/IB_Robot  
+**反馈**: https://gitcode.com/BreezeWu/IB_Robot/issues

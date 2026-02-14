@@ -20,6 +20,19 @@ log_warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $*"; }
 
 # ============================================================================
+# Environment Checks
+# ============================================================================
+check_conda() {
+    if [[ -n "${CONDA_PREFIX}" ]]; then
+        log_error "Active Conda environment detected at: ${CONDA_PREFIX}"
+        log_warn "Conda environments are known to conflict with ROS 2 dependencies (especially Python libraries)."
+        log_warn "Please deactivate the Conda environment before running this script:"
+        echo -e "    ${YELLOW}conda deactivate${NC}"
+        exit 1
+    fi
+}
+
+# ============================================================================
 # Repository Management
 # ============================================================================
 update_submodules() {
@@ -148,6 +161,9 @@ setup_python_venv() {
 # ============================================================================
 main() {
     cd "${WORKSPACE}"
+    
+    # Check for conflicting environments
+    check_conda
     
     log_info "Setting up workspace at ${WORKSPACE}"
     
