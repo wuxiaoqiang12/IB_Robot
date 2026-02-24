@@ -7,6 +7,42 @@ robot:
   type: so101
   robot_type: so_101  # For LeRobot dataset metadata
 
+  # Unified joint definitions (Single Source of Truth)
+  # These joint names are used across all controllers and MoveIt configurations
+  joints:
+    arm:
+      - "1"
+      - "2"
+      - "3"
+      - "4"
+      - "5"
+    gripper:
+      - "6"
+    all: ["1", "2", "3", "4", "5", "6"]
+
+  # Control mode management
+  # The system supports two control modes for different AI model types:
+  # - teleop_act: High-frequency end-to-end models (ACT/pi0) - uses position controllers
+  # - moveit_planning: Planning-based models (VoxPoser/VLM) - uses trajectory controllers
+  default_control_mode: "teleop_act"
+
+  control_modes:
+    teleop_act:
+      description: "High-frequency end-to-end control mode (ACT/pi0)"
+      description_cn: "高频端到端控制模式（ACT/pi0）"
+      controllers:
+        - joint_state_broadcaster
+        - arm_position_controller
+        - gripper_position_controller
+
+    moveit_planning:
+      description: "MoveIt trajectory planning mode (VoxPoser/VLM)"
+      description_cn: "MoveIt轨迹规划模式（VoxPoser/VLM）"
+      controllers:
+        - joint_state_broadcaster
+        - arm_trajectory_controller
+        - gripper_trajectory_controller
+
   # ros2_control configuration
   ros2_control:
     hardware_plugin: so101_hardware/SO101SystemHardware
@@ -172,8 +208,8 @@ robot:
             - position.follower_arm:wrist_roll
             - position.follower_arm:gripper
         publish:
-          topic: /joint_commands
-          type: sensor_msgs/msg/JointState
+          topic: /arm_position_controller/commands
+          type: std_msgs/msg/Float64MultiArray
           layout: flat
           qos:
             reliability: best_effort

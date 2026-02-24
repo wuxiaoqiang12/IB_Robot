@@ -64,8 +64,8 @@ def load_contract_with_robot_config(
             qos=it.get("qos"),
         )
         # Add peripheral metadata if available
-        if "_peripheral" in it:
-            object.__setattr__(obs, "_peripheral", it["_peripheral"])
+        # if "_peripheral" in it:
+        #     object.__setattr__(obs, "_peripheral", it["_peripheral"])
         return obs
 
     def _act(it: Dict[str, Any]) -> ActionSpec:

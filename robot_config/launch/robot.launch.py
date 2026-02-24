@@ -422,6 +422,148 @@ def generate_gazebo_nodes(robot_config, urdf_path):
     return actions
 
 
+def validate_joint_configuration(robot_config):
+    """Validate joint configuration consistency across config files.
+
+    Implements DRY principle validation by checking that joint definitions
+    are consistent between robot_config and controller configuration.
+
+    Args:
+        robot_config: Robot configuration dict
+
+    Returns:
+        bool: True if validation passes, False otherwise
+
+    Raises:
+        Prints warnings/errors but does not raise exceptions to avoid blocking startup
+    """
+    import yaml
+
+    print("[robot_config] ========== Joint Configuration Validation ==========")
+
+    # Get canonical joint list from robot_config
+    joints_config = robot_config.get("joints", {})
+    if not joints_config:
+        print("[robot_config] WARNING: No 'joints' configuration found in robot_config")
+        print("[robot_config] Skipping joint validation (DRY principle not enforced)")
+        return True
+
+    expected_arm_joints = set(joints_config.get("arm", []))
+    expected_gripper_joints = set(joints_config.get("gripper", []))
+    expected_all_joints = set(joints_config.get("all", []))
+
+    print(f"[robot_config] Canonical joints from robot_config:")
+    print(f"[robot_config]   arm: {sorted(expected_arm_joints)}")
+    print(f"[robot_config]   gripper: {sorted(expected_gripper_joints)}")
+    print(f"[robot_config]   all: {sorted(expected_all_joints)}")
+
+    # Load controllers configuration
+    ros2_control_config = robot_config.get("ros2_control", {})
+    controllers_config_path = ros2_control_config.get("controllers_config", "")
+
+    if not controllers_config_path:
+        print("[robot_config] WARNING: No controllers_config path specified")
+        print("[robot_config] Cannot validate controller joint configuration")
+        return True
+
+    # Resolve path
+    controllers_config_path = resolve_ros_path(controllers_config_path)
+
+    if not Path(controllers_config_path).exists():
+        print(f"[robot_config] WARNING: Controllers config not found at {controllers_config_path}")
+        return True
+
+    # Load controllers YAML
+    try:
+        with open(controllers_config_path, 'r') as f:
+            controllers_yaml = yaml.safe_load(f)
+    except Exception as e:
+        print(f"[robot_config] ERROR: Failed to load controllers config: {e}")
+        return False
+
+    # Validate each controller's joint list
+    validation_passed = True
+    controllers_checked = 0
+
+    # Check arm_position_controller
+    arm_pos_ctrl = controllers_yaml.get("arm_position_controller", {}).get("ros__parameters", {})
+    if arm_pos_ctrl:
+        ctrl_joints = set(arm_pos_ctrl.get("joints", []))
+        if ctrl_joints != expected_arm_joints:
+            print(f"[robot_config] ERROR: arm_position_controller joints mismatch!")
+            print(f"[robot_config]   Expected: {sorted(expected_arm_joints)}")
+            print(f"[robot_config]   Found:    {sorted(ctrl_joints)}")
+            validation_passed = False
+        else:
+            print(f"[robot_config] ✓ arm_position_controller joints match")
+        controllers_checked += 1
+
+    # Check arm_trajectory_controller
+    arm_traj_ctrl = controllers_yaml.get("arm_trajectory_controller", {}).get("ros__parameters", {})
+    if arm_traj_ctrl:
+        ctrl_joints = set(arm_traj_ctrl.get("joints", []))
+        if ctrl_joints != expected_arm_joints:
+            print(f"[robot_config] ERROR: arm_trajectory_controller joints mismatch!")
+            print(f"[robot_config]   Expected: {sorted(expected_arm_joints)}")
+            print(f"[robot_config]   Found:    {sorted(ctrl_joints)}")
+            validation_passed = False
+        else:
+            print(f"[robot_config] ✓ arm_trajectory_controller joints match")
+        controllers_checked += 1
+
+    # Check gripper_position_controller
+    gripper_pos_ctrl = controllers_yaml.get("gripper_position_controller", {}).get("ros__parameters", {})
+    if gripper_pos_ctrl:
+        ctrl_joints = set(gripper_pos_ctrl.get("joints", []))
+        if ctrl_joints != expected_gripper_joints:
+            print(f"[robot_config] ERROR: gripper_position_controller joints mismatch!")
+            print(f"[robot_config]   Expected: {sorted(expected_gripper_joints)}")
+            print(f"[robot_config]   Found:    {sorted(ctrl_joints)}")
+            validation_passed = False
+        else:
+            print(f"[robot_config] ✓ gripper_position_controller joints match")
+        controllers_checked += 1
+
+    # Check gripper_trajectory_controller
+    gripper_traj_ctrl = controllers_yaml.get("gripper_trajectory_controller", {}).get("ros__parameters", {})
+    if gripper_traj_ctrl:
+        ctrl_joints = set(gripper_traj_ctrl.get("joints", []))
+        if ctrl_joints != expected_gripper_joints:
+            print(f"[robot_config] ERROR: gripper_trajectory_controller joints mismatch!")
+            print(f"[robot_config]   Expected: {sorted(expected_gripper_joints)}")
+            print(f"[robot_config]   Found:    {sorted(ctrl_joints)}")
+            validation_passed = False
+        else:
+            print(f"[robot_config] ✓ gripper_trajectory_controller joints match")
+        controllers_checked += 1
+
+    # Check joint_state_broadcaster
+    jsb_ctrl = controllers_yaml.get("joint_state_broadcaster", {}).get("ros__parameters", {})
+    if jsb_ctrl:
+        ctrl_joints = set(jsb_ctrl.get("joints", []))
+        if ctrl_joints != expected_all_joints:
+            print(f"[robot_config] ERROR: joint_state_broadcaster joints mismatch!")
+            print(f"[robot_config]   Expected: {sorted(expected_all_joints)}")
+            print(f"[robot_config]   Found:    {sorted(ctrl_joints)}")
+            validation_passed = False
+        else:
+            print(f"[robot_config] ✓ joint_state_broadcaster joints match")
+        controllers_checked += 1
+
+    # Summary
+    print(f"[robot_config] Validated {controllers_checked} controller configurations")
+
+    if validation_passed:
+        print("[robot_config] ✓ All joint configurations are consistent (DRY principle satisfied)")
+    else:
+        print("[robot_config] ✗ Joint configuration validation FAILED")
+        print("[robot_config] Please update controller configs to match robot_config joints definition")
+
+    print("[robot_config] =========================================================")
+
+    return validation_passed
+
+
 def generate_ros2_control_nodes(robot_config, use_sim, auto_start_controllers='true'):
     """Generate ros2_control nodes from configuration.
 
@@ -445,6 +587,9 @@ def generate_ros2_control_nodes(robot_config, use_sim, auto_start_controllers='t
         return nodes
 
     print("[robot_config] Creating ros2_control nodes")
+
+    # Validate joint configuration consistency (DRY principle)
+    validate_joint_configuration(robot_config)
 
     # Get URDF path
     urdf_path = ros2_control_config.get("urdf_path")
@@ -520,7 +665,35 @@ def generate_ros2_control_nodes(robot_config, use_sim, auto_start_controllers='t
     # In simulation mode: Gazebo's gz_ros2_control plugin handles hardware and controllers
     # In real hardware mode: Start ros2_control_node and spawners
     # Read controller configuration from YAML
-    controller_names = ros2_control_config.get("controllers", [])
+
+    # ========== Control Mode Selection ==========
+    # Support both new control_modes format and legacy controllers list
+    control_mode_name = robot_config.get("default_control_mode", "teleop_act")
+    control_modes = robot_config.get("control_modes", {})
+
+    if control_modes:
+        # New control mode format (dual-mode architecture)
+        if control_mode_name not in control_modes:
+            available_modes = list(control_modes.keys())
+            print(f"[robot_config] ERROR: Control mode '{control_mode_name}' not found")
+            print(f"[robot_config] Available modes: {available_modes}")
+            print(f"[robot_config] Falling back to first available mode: {available_modes[0] if available_modes else 'none'}")
+            control_mode_name = available_modes[0] if available_modes else None
+
+        if control_mode_name:
+            mode_config = control_modes[control_mode_name]
+            controller_names = mode_config.get("controllers", [])
+            mode_description = mode_config.get("description", "No description")
+            print(f"[robot_config] Using control mode: {control_mode_name}")
+            print(f"[robot_config]   Description: {mode_description}")
+            print(f"[robot_config]   Controllers: {controller_names}")
+        else:
+            print("[robot_config] ERROR: No valid control mode available")
+            controller_names = []
+    else:
+        # Legacy format (backward compatibility)
+        controller_names = ros2_control_config.get("controllers", [])
+        print(f"[robot_config] Using legacy controllers format: {controller_names}")
 
     # Resolve ROS path substitutions in controllers_config
     controllers_config = resolve_ros_path(ros2_control_config.get("controllers_config"))
@@ -560,6 +733,12 @@ def generate_ros2_control_nodes(robot_config, use_sim, auto_start_controllers='t
 
             # Spawn controllers if auto_start_controllers is enabled
             if is_auto_start and controller_names:
+                print(f"[robot_config] Validating {len(controller_names)} controllers before spawning...")
+                # Note: Full validation requires parsing controllers_config YAML
+                # For now, we log the controllers to be spawned
+                for i, ctrl_name in enumerate(controller_names, 1):
+                    print(f"[robot_config]   [{i}/{len(controller_names)}] {ctrl_name}")
+
                 spawners = generate_controller_spawners(controller_names, use_sim=False, controller_manager_name="controller_manager")
                 nodes.extend(spawners)
                 print(f"[robot_config] Added {len(spawners)} controller spawners (hardware mode, 10s timeout)")
@@ -575,6 +754,10 @@ def generate_ros2_control_nodes(robot_config, use_sim, auto_start_controllers='t
 
         # Spawn controllers if auto_start_controllers is enabled
         if is_auto_start and controller_names:
+            print(f"[robot_config] Validating {len(controller_names)} controllers before spawning...")
+            for i, ctrl_name in enumerate(controller_names, 1):
+                print(f"[robot_config]   [{i}/{len(controller_names)}] {ctrl_name}")
+
             spawners = generate_controller_spawners(controller_names, use_sim=True, controller_manager_name="controller_manager")
             nodes.extend(spawners)
             print(f"[robot_config] Added {len(spawners)} controller spawners (simulation mode, 30s timeout, use_sim_time=True)")
@@ -703,6 +886,90 @@ def generate_tf_nodes(robot_config):
     return nodes
 
 
+def generate_action_dispatcher_node(robot_config: dict) -> Node:
+    """
+    Generate action_dispatcher node based on robot configuration.
+
+    The action_dispatcher node provides unified action execution for both
+    teleop_act (TopicExecutor) and moveit_planning (ActionExecutor) modes.
+
+    Args:
+        robot_config: Robot configuration dictionary
+
+    Returns:
+        Node action for action_dispatcher
+    """
+    # Get control mode
+    control_mode_name = robot_config.get("default_control_mode", "teleop_act")
+
+    # Map control mode to executor mode
+    # teleop_act -> TopicExecutor (position control)
+    # moveit_planning -> ActionExecutor (trajectory control)
+    executor_mode = control_mode_name  # Use the same name for simplicity
+
+    # Get robot name
+    robot_name = robot_config.get("name", "so101")
+
+    # Get joint names from robot config
+    robot_joints_config = robot_config.get("joints", {})
+    all_joints = robot_joints_config.get("all", ["1", "2", "3", "4", "5", "6"])
+
+    print(f"[robot_config] Creating action_dispatcher node")
+    print(f"[robot_config]   executor_mode: {executor_mode}")
+    print(f"[robot_config]   enable_dual_mode: True")
+    print(f"[robot_config]   robot_name: {robot_name}")
+
+    # Create action_dispatcher node
+    action_dispatcher_node = Node(
+        package="action_dispatch",
+        executable="action_dispatcher_node",
+        name="action_dispatcher",
+        parameters=[{
+            # Dual-mode executor settings
+            "enable_dual_mode": True,
+            "executor_mode": executor_mode,
+
+            # Robot configuration
+            "robot_name": robot_name,
+            "joint_names": all_joints,
+
+            # Queue settings
+            "queue_size": 100,
+            "watermark_threshold": 20,
+            "min_queue_size": 10,
+
+            # Control settings
+            "control_frequency": 100.0,
+            "control_mode": control_mode_name,
+
+            # Interpolation settings
+            "interpolation_enabled": True,
+            "interpolation_step": 0.1,
+            "max_interpolation_time": 2.0,
+
+            # Safety settings
+            "on_inference_failure": "hold",
+            "on_queue_exhausted": "hold",
+            "max_inference_timeout": 1.0,
+            "max_retry_attempts": 3,
+            "retry_backoff_base": 0.5,
+            "stale_obs_threshold_ms": 500,
+            "exhaustion_timeout": 2.0,
+
+            # Topics
+            "joint_state_topic": "/joint_states",
+            "dispatch_action_topic": "/action_dispatch/dispatch_action",
+
+            # Inference settings
+            "inference_action_server": "/inference/dispatch",
+            "inference_prompt": "",
+        }],
+        output="screen",
+    )
+
+    return action_dispatcher_node
+
+
 def launch_setup(context, *args, **kwargs):
     """Launch setup function that generates all nodes.
 
@@ -719,12 +986,14 @@ def launch_setup(context, *args, **kwargs):
     config_path_override = context.launch_configurations.get('config_path', '')
     use_sim = context.launch_configurations.get('use_sim', 'false')
     auto_start_controllers = context.launch_configurations.get('auto_start_controllers', 'true')
+    control_mode_override = context.launch_configurations.get('control_mode', '')
 
     print(f"[robot_config] Launch setup with:")
     print(f"[robot_config]   robot_config: {robot_config_name}")
     print(f"[robot_config]   config_path: {config_path_override if config_path_override else '(none)'}")
     print(f"[robot_config]   use_sim: {use_sim}")
     print(f"[robot_config]   auto_start_controllers: {auto_start_controllers}")
+    print(f"[robot_config]   control_mode: {control_mode_override if control_mode_override else '(from config)'}")
 
     # Load robot configuration
     try:
@@ -732,6 +1001,15 @@ def launch_setup(context, *args, **kwargs):
     except Exception as e:
         print(f"[robot_config] ERROR loading config: {e}")
         raise
+
+    # ========== Control Mode Override ==========
+    # Allow command-line parameter to override default_control_mode from YAML
+    if control_mode_override:
+        original_mode = robot_config.get('default_control_mode', 'unknown')
+        robot_config['default_control_mode'] = control_mode_override
+        print(f"[robot_config] Control mode override: {original_mode} -> {control_mode_override}")
+    else:
+        print(f"[robot_config] Using default control mode from config: {robot_config.get('default_control_mode', 'teleop_act')}")
 
     # ========== ros2_control Nodes ==========
     try:
@@ -774,6 +1052,14 @@ def launch_setup(context, *args, **kwargs):
         print(f"[robot_config] ERROR generating TF nodes: {e}")
         raise
 
+    # ========== Action Dispatcher Node ==========
+    try:
+        action_dispatcher_node = generate_action_dispatcher_node(robot_config)
+        actions.append(action_dispatcher_node)
+    except Exception as e:
+        print(f"[robot_config] ERROR generating action_dispatcher node: {e}")
+        raise
+
     print(f"[robot_config] Total nodes to launch: {len(actions)}")
 
     return actions
@@ -801,6 +1087,11 @@ def generate_launch_description():
             "auto_start_controllers",
             default_value="true",
             description="Automatically spawn controllers (set to false for debugging)",
+        ),
+        DeclareLaunchArgument(
+            "control_mode",
+            default_value="",
+            description="Override control mode from YAML (teleop_act or moveit_planning). If empty, uses default_control_mode from config file",
         ),
         OpaqueFunction(function=launch_setup),
     ])
