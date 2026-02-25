@@ -1,0 +1,232 @@
+"""Perception system launch builders.
+
+This module handles:
+- Camera driver nodes (usb_cam, realsense2_camera)
+- Static TF publishers for camera frames
+- Virtual camera relays
+"""
+
+from pathlib import Path
+from launch_ros.actions import Node
+
+from robot_config.utils import parse_bool
+
+
+def generate_camera_nodes(robot_config, use_sim=False):
+    """Generate camera driver nodes from configuration.
+
+    Args:
+        robot_config: Robot configuration dict
+        use_sim: Simulation mode (if True, skip physical cameras)
+
+    Returns:
+        List of Node actions for cameras
+    """
+    is_sim = parse_bool(use_sim, default=False)
+    nodes = []
+
+    peripherals = robot_config.get("peripherals", [])
+    print(f"[robot_config] Generating nodes for {len(peripherals)} peripherals (use_sim={is_sim})")
+
+    for periph in peripherals:
+        periph_type = periph.get("type")
+
+        # Skip virtual cameras in first pass
+        if periph_type == "virtual_camera":
+            continue
+
+        if periph_type != "camera":
+            continue
+
+        name = periph["name"]
+        driver = periph.get("driver", "opencv")
+        print(f"[robot_config] Creating camera node: {name} (driver={driver})")
+
+        if driver == "opencv":
+            # Use usb_cam package
+            index = periph.get("index", 0)
+            video_device = f"/dev/video{index}" if isinstance(index, int) else index
+
+            params = {
+                "use_sim_time": is_sim,
+                "camera_name": name,
+                "framerate": float(periph.get("fps", 30)),
+                "image_width": periph.get("width", 640),
+                "image_height": periph.get("height", 480),
+                "pixel_format": periph.get("pixel_format", "mjpeg"),
+                "camera_frame_id": periph.get("frame_id", f"camera_{name}_frame"),
+                "video_device": video_device,
+            }
+
+            if "camera_info_url" in periph:
+                params["camera_info_url"] = periph["camera_info_url"]
+
+            # Optional parameters
+            for key in ["brightness", "contrast", "saturation", "sharpness"]:
+                if key in periph:
+                    params[key] = periph[key]
+
+            print(f"[robot_config]   Camera params: {params}")
+
+            nodes.append(Node(
+                package="usb_cam",
+                executable="usb_cam_node_exe",
+                name=f"{name}_camera",
+                parameters=[params],
+                remappings=[
+                    ("image_raw", f"/camera/{name}/image_raw"),
+                    ("camera_info", f"/camera/{name}/camera_info"),
+                ],
+                output="screen",
+            ))
+
+        elif driver == "realsense":
+            # Use realsense2_camera package
+            params = {
+                "use_sim_time": is_sim,
+                "camera_name": name,
+                "camera_fps": periph.get("fps", 30),
+                "color_width": periph.get("width", 640),
+                "color_height": periph.get("height", 480),
+                "color_format": periph.get("pixel_format", "bgr8").upper(),
+                "camera_frame_id": periph.get("frame_id", f"camera_{name}_frame"),
+                "enable_pointcloud": periph.get("enable_pointcloud", False),
+                "enable_sync": periph.get("enable_sync", True),
+                "align_depth": periph.get("align_depth", False),
+            }
+
+            if "depth_width" in periph:
+                params["depth_width"] = periph["depth_width"]
+                params["depth_height"] = periph["depth_height"]
+            if "depth_fps" in periph:
+                params["depth_fps"] = periph["depth_fps"]
+            if "serial_number" in periph:
+                params["serial_no"] = str(periph["serial_number"])
+
+            print(f"[robot_config]   RealSense params: {params}")
+
+            nodes.append(Node(
+                package="realsense2_camera",
+                executable="realsense2_camera_node",
+                name=f"{name}_camera",
+                parameters=[params],
+                remappings=[
+                    (f"/camera/{name}/color/image_raw", f"/camera/{name}/image_raw"),
+                    (f"/camera/{name}/color/camera_info", f"/camera/{name}/camera_info"),
+                ],
+                output="screen",
+            ))
+
+    return nodes
+
+
+def generate_virtual_camera_relays(robot_config):
+    """Generate virtual camera relay nodes.
+
+    Creates topic_tools relay nodes to duplicate existing camera topics
+    for virtual cameras (e.g., wrist camera relayed from top camera).
+
+    Args:
+        robot_config: Robot configuration dict
+
+    Returns:
+        List of Node actions for virtual camera relays
+    """
+    nodes = []
+
+    peripherals = robot_config.get("peripherals", [])
+    for periph in peripherals:
+        if periph.get("type") != "camera":
+            continue
+
+        driver = periph.get("driver", "")
+
+        # Check if this is a virtual camera (driver == "virtual")
+        if driver != "virtual":
+            continue
+
+        name = periph["name"]
+        source_topic = periph.get("source_topic")
+
+        # Construct target topic
+        target_topic = f"/camera/{name}/image_raw"
+
+        if not source_topic:
+            print(f"[robot_config] WARNING: Virtual camera {name} missing source_topic")
+            continue
+
+        print(f"[robot_config] Creating virtual camera relay: {name}")
+        print(f"[robot_config]   {source_topic} -> {target_topic}")
+
+        nodes.append(Node(
+            package="topic_tools",
+            executable="relay",
+            name=f"{name}_relay",
+            arguments=[source_topic, target_topic],
+            output="screen",
+        ))
+
+    return nodes
+
+
+def generate_tf_nodes(robot_config):
+    """Generate static TF publisher nodes for camera frames.
+
+    Args:
+        robot_config: Robot configuration dict
+
+    Returns:
+        List of Node actions for TF publishers
+    """
+    nodes = []
+
+    peripherals = robot_config.get("peripherals", [])
+    for periph in peripherals:
+        if periph.get("type") != "camera":
+            continue
+
+        name = periph.get("name")
+        frame_id = periph.get("frame_id")
+        optical_frame_id = periph.get("optical_frame_id")
+        transform = periph.get("transform", {})
+
+        if not all([frame_id, optical_frame_id, transform]):
+            continue
+
+        parent_frame = transform.get("parent_frame", "base_link")
+        x = transform.get("x", 0.0)
+        y = transform.get("y", 0.0)
+        z = transform.get("z", 0.0)
+        roll = transform.get("roll", 0.0)
+        pitch = transform.get("pitch", 0.0)
+        yaw = transform.get("yaw", 0.0)
+
+        # Main frame TF
+        nodes.append(Node(
+            package="tf2_ros",
+            executable="static_transform_publisher",
+            name=f"static_tf_{name}",
+            arguments=[
+                str(x), str(y), str(z),
+                str(roll), str(pitch), str(yaw),
+                parent_frame,
+                frame_id,
+            ],
+            output="screen",
+        ))
+
+        # Optical frame TF (standard rotation for camera sensors)
+        nodes.append(Node(
+            package="tf2_ros",
+            executable="static_transform_publisher",
+            name=f"static_tf_{name}_optical",
+            arguments=[
+                "0", "0", "0",
+                "-0.5", "0.5", "-0.5", "0.5",  # ROS optical frame convention
+                frame_id,
+                optical_frame_id,
+            ],
+            output="screen",
+        ))
+
+    return nodes
