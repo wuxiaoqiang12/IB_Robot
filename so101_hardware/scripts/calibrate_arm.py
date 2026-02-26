@@ -5,8 +5,8 @@ import argparse
 import pathlib
 import rclpy
 from rclpy.node import Node
-from so101_hardware.motors.feetech import FeetechMotorsBus
-from so101_hardware.motors import Motor, MotorNormMode
+from lerobot.motors.feetech import FeetechMotorsBus
+from lerobot.motors import Motor, MotorNormMode
 from so101_hardware.calibration.interactive import run_interactive_calibration, save_calibration
 from so101_hardware.calibration.constants import (
     FOLLOWER_CALIB_FILE,

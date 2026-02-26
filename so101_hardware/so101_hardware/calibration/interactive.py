@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 import pathlib
 import sys
-from so101_hardware.motors import MotorCalibration
-from so101_hardware.motors.feetech.feetech import OperatingMode
+from lerobot.motors import MotorCalibration
+from lerobot.motors.feetech.feetech import OperatingMode
 from so101_hardware.calibration.constants import FOLLOWER_CALIB_FILE
 
 

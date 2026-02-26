@@ -29,8 +29,8 @@ import pathlib
 import json
 import time
 
-from so101_hardware.motors.feetech.feetech import FeetechMotorsBus
-from so101_hardware.motors import Motor, MotorNormMode, MotorCalibration
+from lerobot.motors.feetech.feetech import FeetechMotorsBus
+from lerobot.motors import Motor, MotorNormMode, MotorCalibration
 
 
 # 定义所有关节的共享配置

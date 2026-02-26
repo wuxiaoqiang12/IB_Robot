@@ -3,8 +3,8 @@ import rclpy
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from sensor_msgs.msg import JointState
-from so101_hardware.motors.feetech import FeetechMotorsBus, OperatingMode
-from so101_hardware.motors import Motor, MotorNormMode, MotorCalibration
+from lerobot.motors.feetech import FeetechMotorsBus, OperatingMode
+from lerobot.motors import Motor, MotorNormMode, MotorCalibration
 from so101_hardware.calibration.interactive import load_calibration
 from so101_hardware.calibration.constants import LEADER_CALIB_FILE, DEFAULT_SERIAL_PORT, JOINT_NAMES
 import time

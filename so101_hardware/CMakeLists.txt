@@ -64,7 +64,6 @@ pluginlib_export_plugin_description_file(hardware_interface so101_hardware_plugi
 
 # ===== Python Package =====
 ament_python_install_package(${PROJECT_NAME})
-ament_python_install_package(lerobot)
 
 # Install Python scripts without .py suffix for ROS 2 standards
 install(PROGRAMS scripts/calibrate_arm.py DESTINATION lib/${PROJECT_NAME} RENAME calibrate_arm)

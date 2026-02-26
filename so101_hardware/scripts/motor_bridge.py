@@ -41,8 +41,8 @@ except ImportError:  # create stub
     sys.modules["tqdm"] = tqdm_stub
 # -----------------------------------------------------------------------------
 
-from so101_hardware.motors.feetech.feetech import FeetechMotorsBus, OperatingMode
-from so101_hardware.motors import Motor, MotorNormMode, MotorCalibration
+from lerobot.motors.feetech.feetech import FeetechMotorsBus, OperatingMode
+from lerobot.motors import Motor, MotorNormMode, MotorCalibration
 from so101_hardware.calibration.interactive import load_calibration
 
 PORT_DEFAULT = "/dev/ttyACM0"
