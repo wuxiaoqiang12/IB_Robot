@@ -7,8 +7,21 @@ robot:
   type: so101
   robot_type: so_101  # For LeRobot dataset metadata
 
+  # ============================================
+  # Model Library (新增)
+  # ============================================
+  models:
+    so101_act:
+      path: /home/xqw/Research/IB_Robot/models/502000/pretrained_model
+      policy_type: act
+      # Normalization parameters (optional, for future use)
+      normalization:
+        action_scale: [0.0314, 0.0314, 0.0314, 0.0314, 0.0314, 0.0008]
+        action_offset: [0.0, 0.0, 0.0, 0.0, 0.0, 0.04]
+
+  # ============================================
   # Unified joint definitions (Single Source of Truth)
-  # These joint names are used across all controllers and MoveIt configurations
+  # ============================================
   joints:
     arm:
       - "1"
@@ -21,9 +34,6 @@ robot:
     all: ["1", "2", "3", "4", "5", "6"]
 
   # Control mode management
-  # The system supports two control modes for different AI model types:
-  # - teleop_act: High-frequency end-to-end models (ACT/pi0) - uses position controllers
-  # - moveit_planning: Planning-based models (VoxPoser/VLM) - uses trajectory controllers
   default_control_mode: "teleop_act"
 
   control_modes:
@@ -34,6 +44,28 @@ robot:
         - joint_state_broadcaster
         - arm_position_controller
         - gripper_position_controller
+      # ============================================
+      # Inference configuration (新增)
+      # ============================================
+      inference:
+        enabled: true
+        model: so101_act
+        action_server: /inference/dispatch
+        observations:
+          - source: wrist
+            key: images.wrist
+          - source: top
+            key: images.top
+          - source: joint_states
+            key: state
+      # ============================================
+      # Executor configuration (新增)
+      # ============================================
+      executor:
+        type: topic  # topic | action
+        mode: teleop_act
+        queue_size: 100
+        control_frequency: 100.0
 
     moveit_planning:
       description: "MoveIt trajectory planning mode (VoxPoser/VLM)"
@@ -42,6 +74,11 @@ robot:
         - joint_state_broadcaster
         - arm_trajectory_controller
         - gripper_trajectory_controller
+      inference:
+        enabled: false  # MoveIt模式不需要推理
+      executor:
+        type: action
+        mode: moveit_planning
 
   # ros2_control configuration
   ros2_control:
@@ -78,7 +115,7 @@ robot:
       width: 640
       height: 480
       fps: 30
-      pixel_format: yuyv
+      pixel_format: mjpeg2rgb
       frame_id: camera_top_frame
       optical_frame_id: camera_top_optical_frame
       # Camera position relative to parent frame (base_link)
@@ -100,7 +137,7 @@ robot:
       width: 640
       height: 480
       fps: 60
-      pixel_format: yuyv
+      pixel_format: mjpeg2rgb
       frame_id: camera_wrist_frame
       optical_frame_id: camera_wrist_optical_frame
       # Camera position relative to parent frame

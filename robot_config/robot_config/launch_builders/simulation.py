@@ -135,7 +135,7 @@ def generate_gazebo_nodes(robot_config):
     clock_bridge = Node(
         package='ros_gz_bridge',
         executable='parameter_bridge',
-        arguments=['/clock@rosgraph_msgs/msg/Clock'],
+        arguments=['/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock'],
         output='screen',
     )
 
@@ -143,7 +143,7 @@ def generate_gazebo_nodes(robot_config):
     joint_state_bridge = Node(
         package='ros_gz_bridge',
         executable='parameter_bridge',
-        arguments=[f'/world/demo/model/{robot_config.get("name", "so101")}/joint_state@sensor_msgs/msg/JointState'],
+        arguments=[f'/world/demo/model/{robot_config.get("name", "so101")}/joint_state@sensor_msgs/msg/JointState[gz.msgs.Model'],
         output='screen',
     )
 
@@ -159,7 +159,7 @@ def generate_gazebo_nodes(robot_config):
             package='ros_gz_bridge',
             executable='parameter_bridge',
             arguments=[
-                f'/world/demo/model/{model_name}/link/{sensor_name}_link/sensor/{sensor_name}/{sensor_name}/image@sensor_msgs/msg/Image'
+                f'/world/demo/model/{model_name}/link/{sensor_name}_link/sensor/{sensor_name}/{sensor_name}/image@sensor_msgs/msg/Image[gz.msgs.Image'
             ],
             output='screen',
         ))
@@ -169,7 +169,7 @@ def generate_gazebo_nodes(robot_config):
             package='ros_gz_bridge',
             executable='parameter_bridge',
             arguments=[
-                f'/world/demo/model/{model_name}/link/{sensor_name}_link/sensor/{sensor_name}/{sensor_name}/camera_info@sensor_msgs/msg/CameraInfo'
+                f'/world/demo/model/{model_name}/link/{sensor_name}_link/sensor/{sensor_name}/{sensor_name}/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo'
             ],
             output='screen',
         ))

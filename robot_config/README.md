@@ -85,6 +85,249 @@ robot:
           resize: [480, 640]
 ```
 
+## Control Mode Configuration
+
+The robot_config package supports dual control modes for different AI model requirements:
+
+### Available Control Modes
+
+#### 1. teleop_act Mode (High-Frequency Position Control)
+
+**Use for:** End-to-end imitation learning models (ACT, pi0, Diffusion Policy)
+
+**Characteristics:**
+- High-frequency control (50-100Hz)
+- Low latency (1-3ms)
+- Direct topic-based position commands
+- Reactive, fluid movements
+
+**Configuration:**
+```yaml
+robot:
+  default_control_mode: "teleop_act"
+
+  control_modes:
+    teleop_act:
+      description: "High-frequency end-to-end control mode"
+      controllers:
+        - joint_state_broadcaster
+        - arm_position_controller
+        - gripper_position_controller
+```
+
+**Launched controllers:**
+- `arm_position_controller` (JointGroupPositionController)
+- `gripper_position_controller` (ForwardCommandController)
+
+**Command interface:**
+```bash
+# Arm position commands
+ros2 topic pub /arm_position_controller/commands std_msgs/msg/Float64MultiArray "data: [1.0, 2.0, 3.0, 4.0, 5.0]"
+
+# Gripper position commands
+ros2 topic pub /gripper_position_controller/commands std_msgs/msg/Float64MultiArray "data: [0.5]"
+```
+
+#### 2. moveit_planning Mode (Trajectory Planning)
+
+**Use for:** Planning-based models (VoxPoser, VLM, goal-conditioned policies)
+
+**Characteristics:**
+- MoveIt integration (OMPL/Pilz planners)
+- Time-parameterized trajectories
+- Action-based execution with monitoring
+- Collision avoidance support
+
+**Configuration:**
+```yaml
+robot:
+  default_control_mode: "moveit_planning"
+
+  control_modes:
+    moveit_planning:
+      description: "MoveIt trajectory planning mode"
+      controllers:
+        - joint_state_broadcaster
+        - arm_trajectory_controller
+        - gripper_trajectory_controller
+```
+
+**Launched controllers:**
+- `arm_trajectory_controller` (JointTrajectoryController)
+- `gripper_trajectory_controller` (JointTrajectoryController)
+
+**Command interface:**
+```bash
+# List available actions
+ros2 action list
+
+# Execute trajectory via action
+ros2 action send_goal /arm_trajectory_controller/follow_joint_trajectory control_msgs/action/FollowJointTrajectory "{...}"
+```
+
+### Overriding Control Mode at Runtime
+
+Control mode can be overridden via command line:
+
+```bash
+# Use default mode from config file
+ros2 launch robot_config robot.launch.py robot_config:=so101_single_arm
+
+# Override to teleop_act mode
+ros2 launch robot_config robot.launch.py robot_config:=so101_single_arm control_mode:=teleop_act
+
+# Override to moveit_planning mode
+ros2 launch robot_config robot.launch.py robot_config:=so101_single_arm control_mode:=moveit_planning
+```
+
+### Mode Selection Decision Guide
+
+```
+What type of model are you using?
+│
+├─ End-to-end imitation learning (ACT, pi0, Diffusion)
+│  └─ Use teleop_act mode
+│     ├─ Model outputs high-frequency position streams (50-100Hz)
+│     ├─ Needs minimal latency (< 5ms)
+│     └─ No trajectory planning required
+│
+└─ Planning-based (VoxPoser, VLM, goal-conditioned)
+   └─ Use moveit_planning mode
+      ├─ Model outputs sparse waypoints or goals
+      ├─ Needs collision avoidance
+      ├─ Requires MoveIt integration
+      └─ Time-parameterized trajectories important
+```
+
+### Complete Configuration Example
+
+```yaml
+robot:
+  name: so101_single_arm
+  type: so101
+  robot_type: so_101
+
+  # Control mode management
+  default_control_mode: "teleop_act"  # Can be overridden via command line
+
+  control_modes:
+    teleop_act:
+      description: "High-frequency end-to-end control mode (ACT/pi0)"
+      controllers:
+        - joint_state_broadcaster
+        - arm_position_controller
+        - gripper_position_controller
+
+    moveit_planning:
+      description: "MoveIt trajectory planning mode (VoxPoser/VLM)"
+      controllers:
+        - joint_state_broadcaster
+        - arm_trajectory_controller
+        - gripper_trajectory_controller
+
+  # Unified joint configuration (DRY principle)
+  joints:
+    arm: ["1", "2", "3", "4", "5"]
+    gripper: ["6"]
+    all: ["1", "2", "3", "4", "5", "6"]
+
+  # Hardware configuration
+  ros2_control:
+    hardware_plugin: so101_hardware/SO101SystemHardware
+    port: /dev/ttyACM0
+    calib_file: $(env HOME)/.calibrate/so101_follower_calibrate.json
+    reset_positions:
+      "1": 0.0813
+      "2": 3.7905
+
+  # Peripherals (cameras, sensors)
+  peripherals:
+    - type: camera
+      name: top
+      driver: opencv
+      index: 0
+      width: 640
+      height: 480
+      fps: 30
+
+  # ML contract
+  contract:
+    observations:
+      - key: observation.images.top
+        topic: /camera/top
+        peripheral: top
+        image:
+          resize: [480, 640]
+    actions:
+      - key: action
+        topic: /arm_position_controller/commands  # Changes based on mode
+        ros_type: std_msgs/msg/Float64MultiArray
+        names: ["1", "2", "3", "4", "5", "6"]
+```
+
+### How Mode Switching Works
+
+1. **Configuration Phase:**
+   - `robot.launch.py` reads `default_control_mode` from YAML
+   - Can be overridden via `control_mode:=xxx` command line argument
+   - Validates mode exists in `control_modes` section
+
+2. **Controller Spawning:**
+   - Only controllers listed in the selected mode are spawned
+   - Ensures no controller conflicts (same joint can't be controlled by multiple controllers)
+
+3. **Action Dispatch Integration:**
+   - `action_dispatch` node reads current mode from `robot_config`
+   - Instantiates appropriate executor (TopicExecutor or ActionExecutor)
+   - Provides unified API for upstream inference services
+
+### Troubleshooting Control Modes
+
+#### Mode not switching
+
+**Problem:** Command line override not taking effect
+
+**Solution:** Ensure `control_mode` parameter is correctly spelled:
+```bash
+# Correct
+ros2 launch robot_config robot.launch.py control_mode:=moveit_planning
+
+# Incorrect (typo)
+ros2 launch robot_config robot.launch.py control_mode:=moveit_planing
+```
+
+#### Controller not starting
+
+**Problem:** Controllers fail to activate
+
+**Solution:** Check controller configuration in `so101_hardware/config/so101_controllers.yaml`:
+```bash
+# Verify controller exists
+ros2 control list_controllers
+
+# Check controller configuration
+cat src/so101_hardware/config/so101_controllers.yaml | grep -A 10 "arm_trajectory_controller"
+```
+
+#### Action server not available
+
+**Problem:** `FollowJointTrajectory` action not found in moveit_planning mode
+
+**Solution:** Ensure trajectory controllers are active:
+```bash
+# List active controllers
+ros2 control list_controllers | grep trajectory
+
+# Should see:
+# arm_trajectory_controller[joint_trajectory_controller/JointTrajectoryController] active
+# gripper_trajectory_controller[joint_trajectory_controller/JointTrajectoryController] active
+```
+
+For more details, see:
+- [action_dispatch README](../action_dispatch/README.md) - Detailed executor documentation
+- [docs/architecture.md](../../docs/architecture.md) - System architecture overview
+
+
 ## Usage
 
 ### Launching the Robot

@@ -1,26 +1,170 @@
-"""Execution system launch builders.
+"""Execution system launch builders (refactored).
 
 This module handles:
-- Action dispatcher node
-- Inference service nodes (ACT, pi0, etc.)
-- Control mode integration
+- Inference service node generation (with contract synthesis)
+- Action dispatcher node generation
+- Automatic parameter binding from robot_config
 """
 
+import os
+import sys
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 from launch.substitutions import PathJoinSubstitution
+from pathlib import Path
 
 from robot_config.utils import parse_bool
+from robot_config.contract_builder import synthesize_contract, get_contract_output_path, save_contract
 
 
-def generate_action_dispatcher_node(robot_config, use_sim=False):
-    """Generate action dispatcher node based on robot configuration.
+def generate_inference_node(robot_config, control_mode, use_sim=False):
+    """Generate inference service node with auto-synthesized contract.
 
-    The action_dispatcher node provides unified action execution for both
-    teleop_act (TopicExecutor) and moveit_planning (ActionExecutor) modes.
+    This function:
+    1. Synthesizes contract from robot_config
+    2. Saves contract for debugging and inference_service
+    3. Creates inference node with proper parameters
 
     Args:
-        robot_config: Robot configuration dictionary
+        robot_config: Robot configuration dict
+        control_mode: Active control mode
+        use_sim: Simulation mode flag
+
+    Returns:
+        Node action for inference service, or None if not enabled
+
+    Raises:
+        ContractSynthesisError: If configuration is architecturally invalid
+    """
+    is_sim = parse_bool(use_sim, default=False)
+
+    # Get control mode configuration
+    control_modes = robot_config.get('control_modes', {})
+    if control_mode not in control_modes:
+        print(f"[robot_config] WARNING: Control mode '{control_mode}' not found")
+        return None
+
+    mode_config = control_modes[control_mode]
+    inference_config = mode_config.get('inference', {})
+
+    if not inference_config.get('enabled', False):
+        print(f"[robot_config] Inference not enabled for mode '{control_mode}'")
+        return None
+
+    print(f"[robot_config] ========== Generating Inference Node ==========")
+    print(f"[robot_config] Control mode: {control_mode}")
+
+    # Step 1: Synthesize contract
+    contract = synthesize_contract(robot_config, control_mode)
+    if not contract:
+        print(f"[robot_config] ERROR: Failed to synthesize contract")
+        return None
+
+    # Step 2: Save contract (for debugging and inference_service)
+    contract_path = get_contract_output_path(robot_config, control_mode)
+
+    try:
+        save_contract(contract, contract_path)
+    except Exception as e:
+        print(f"[robot_config] WARNING: Could not save contract: {e}")
+
+    # Step 3: Get model configuration
+    model_name = inference_config['model']
+    models = robot_config.get('models', {})
+    if model_name not in models:
+        print(f"[robot_config] ERROR: Model '{model_name}' not found in config")
+        return None
+
+    model_config = models[model_name]
+
+    print(f"[robot_config] Model: {model_name}")
+    print(f"[robot_config]   Path: {model_config['path']}")
+    print(f"[robot_config]   Policy type: {model_config.get('policy_type', 'unknown')}")
+    print(f"[robot_config]   Contract: {contract_path}")
+
+    # Step 4: Prepare environment for inference node (CRITICAL for venv and library loading)
+    env = os.environ.copy()
+    
+    # 1. Inject PYTHONPATH to find robot_config, lerobot and other packages
+    workspace_path = os.environ.get('WORKSPACE', os.getcwd())
+    # FIX: lerobot package is inside 'src' directory of the library
+    lerobot_src = os.path.join(workspace_path, 'libs/lerobot/src')
+    
+    # Debug information for environment
+    print(f"[robot_config] ========== Environment Diagnostics ==========")
+    print(f"[robot_config] Workspace: {workspace_path}")
+    print(f"[robot_config] Lerobot SRC: {lerobot_src} (Exists: {os.path.exists(lerobot_src)})")
+    
+    # Get AMENT_PREFIX_PATH to find other built packages
+    ament_prefix = os.environ.get('AMENT_PREFIX_PATH', '')
+    site_packages_paths = []
+    if ament_prefix:
+        for path in ament_prefix.split(':'):
+            if 'install' in path:
+                sp = os.path.join(path, 'lib', 'python3.10', 'site-packages')
+                if os.path.exists(sp): site_packages_paths.append(sp)
+    
+    # Construct new PYTHONPATH
+    new_python_paths = []
+    if os.path.exists(lerobot_src): 
+        new_python_paths.append(lerobot_src)
+    
+    # Also include the venv site-packages if we are in one
+    venv_path = os.environ.get('VIRTUAL_ENV')
+    if venv_path:
+        venv_site_packages = os.path.join(venv_path, 'lib', f'python{sys.version_info.major}.{sys.version_info.minor}', 'site-packages')
+        if os.path.exists(venv_site_packages):
+            new_python_paths.append(venv_site_packages)
+            print(f"[robot_config] Venv site-packages added: {venv_site_packages}")
+
+    new_python_paths.extend(site_packages_paths)
+    
+    if 'PYTHONPATH' in env:
+        env['PYTHONPATH'] = f"{':'.join(new_python_paths)}:{env['PYTHONPATH']}"
+    else:
+        env['PYTHONPATH'] = ':'.join(new_python_paths)
+
+    # 2. Inject LD_LIBRARY_PATH to find librcl_action.so and other C libraries
+    ros_lib_path = "/opt/ros/humble/lib"
+    if 'LD_LIBRARY_PATH' in env:
+        if ros_lib_path not in env['LD_LIBRARY_PATH']:
+            env['LD_LIBRARY_PATH'] = f"{ros_lib_path}:{env['LD_LIBRARY_PATH']}"
+    else:
+        env['LD_LIBRARY_PATH'] = ros_lib_path
+
+    print(f"[robot_config] Final PYTHONPATH: {env.get('PYTHONPATH', 'NOT_SET')[:200]}...")
+    print(f"[robot_config] Final LD_LIBRARY_PATH: {env.get('LD_LIBRARY_PATH', 'NOT_SET')}")
+    print(f"[robot_config] ===============================================")
+
+    # Step 5: Create inference node with enriched environment
+    node_params = {
+        'checkpoint': model_config['path'], # Changed from model_path to checkpoint
+        'contract_path': str(contract_path),
+        'passive_mode': True,
+        'device': 'auto',
+        'use_sim_time': is_sim,
+        'node_name': 'act_inference_node',
+    }
+
+    inference_node = Node(
+        package='inference_service',
+        executable='lerobot_policy_node',
+        name='act_inference_node',
+        env=env, # <--- Pass the enriched environment
+        parameters=[node_params],
+        output='screen',
+    )
+
+    print(f"[robot_config] ✓ Inference node configured")
+    return inference_node
+
+
+def generate_action_dispatcher_node(robot_config, control_mode, use_sim=False):
+    """Generate action dispatcher node with configuration binding.
+
+    Args:
+        robot_config: Robot configuration dict
+        control_mode: Active control mode
         use_sim: Simulation mode flag
 
     Returns:
@@ -28,49 +172,57 @@ def generate_action_dispatcher_node(robot_config, use_sim=False):
     """
     is_sim = parse_bool(use_sim, default=False)
 
-    # Get control mode
-    control_mode_name = robot_config.get("default_control_mode", "teleop_act")
+    # Get control mode configuration
+    control_modes = robot_config.get('control_modes', {})
+    mode_config = control_modes.get(control_mode, {})
+    executor_config = mode_config.get('executor', {})
 
-    # Map control mode to executor mode
-    # teleop_act -> TopicExecutor (position control)
-    # moveit_planning -> ActionExecutor (trajectory control)
-    executor_mode = control_mode_name  # Use the same name for simplicity
+    # Get robot configuration
+    # Note: robot_config is already the robot object (from data.get("robot", {}))
+    robot_name = robot_config.get('name', 'so101')
+    robot_joints = robot_config.get('joints', {})
+    all_joints = robot_joints.get('all', ["1", "2", "3", "4", "5", "6"])
 
-    # Get robot name
-    robot_name = robot_config.get("name", "so101")
+    # Executor settings
+    executor_type = executor_config.get('type', 'topic')
+    executor_mode = executor_config.get('mode', control_mode)
 
-    # Get joint names from robot config
-    robot_joints_config = robot_config.get("joints", {})
-    all_joints = robot_joints_config.get("all", ["1", "2", "3", "4", "5", "6"])
+    print(f"[robot_config] ========== Generating Action Dispatcher ==========")
+    print(f"[robot_config] Robot: {robot_name}")
+    print(f"[robot_config] Control mode: {control_mode}")
+    print(f"[robot_config] Executor type: {executor_type}")
+    print(f"[robot_config] Use sim time: {is_sim}")
 
-    print(f"[robot_config] Creating action_dispatcher node")
-    print(f"[robot_config]   executor_mode: {executor_mode}")
-    print(f"[robot_config]   enable_dual_mode: True")
-    print(f"[robot_config]   robot_name: {robot_name}")
-    print(f"[robot_config]   use_sim_time: {is_sim}")
+    # Get inference configuration
+    inference_config = mode_config.get('inference', {})
 
-    # Create action_dispatcher node
+    # CRITICAL: Align with inference_service's actual action server name
+    # The LeRobotPolicyNode (PassiveInferenceNode) creates an action server named 'DispatchInfer'
+    # under its own node name ('act_inference_node').
+    action_server = '/act_inference_node/DispatchInfer'
+
+    # Create action dispatcher node
     action_dispatcher_node = Node(
         package="action_dispatch",
         executable="action_dispatcher_node",
         name="action_dispatcher",
         parameters=[{
-            # Dual-mode executor settings
-            "enable_dual_mode": True,
+            # Executor settings
+            "enable_dual_mode": executor_type == 'topic',
             "executor_mode": executor_mode,
 
             # Robot configuration
             "robot_name": robot_name,
             "joint_names": all_joints,
 
-            # Queue settings
-            "queue_size": 100,
-            "watermark_threshold": 20,
-            "min_queue_size": 10,
+            # Queue settings (from config or defaults)
+            "queue_size": executor_config.get('queue_size', 100),
+            "watermark_threshold": executor_config.get('watermark_threshold', 20),
+            "min_queue_size": executor_config.get('min_queue_size', 10),
 
             # Control settings
-            "control_frequency": 100.0,
-            "control_mode": control_mode_name,
+            "control_frequency": executor_config.get('control_frequency', 100.0),
+            "control_mode": control_mode,
 
             # Interpolation settings
             "interpolation_enabled": True,
@@ -91,7 +243,7 @@ def generate_action_dispatcher_node(robot_config, use_sim=False):
             "dispatch_action_topic": "/action_dispatch/dispatch_action",
 
             # Inference settings
-            "inference_action_server": "/inference/dispatch",
+            "inference_action_server": action_server,
             "inference_prompt": "",
 
             # Simulation time
@@ -100,112 +252,49 @@ def generate_action_dispatcher_node(robot_config, use_sim=False):
         output="screen",
     )
 
+    print(f"[robot_config] ✓ Action dispatcher configured")
     return action_dispatcher_node
 
 
-def generate_execution_nodes(robot_config, control_mode='teleop_act', with_inference=False):
-    """Generate inference and action dispatch nodes.
+def generate_execution_nodes(robot_config, control_mode='teleop_act', use_sim=False):
+    """Generate all execution nodes (inference + dispatcher).
+
+    This is the main entry point for execution system generation.
+    It automatically determines whether to launch inference based on
+    the control_mode configuration.
 
     Args:
         robot_config: Robot configuration dict
-        control_mode: Control mode (teleop_act, moveit_planning, etc.)
-        with_inference: Whether to launch inference service
+        control_mode: Active control mode (defaults to robot's default_control_mode)
+        use_sim: Simulation mode flag
 
     Returns:
         List of Node actions for execution system
     """
-    from robot_config.utils import parse_bool
-
     nodes = []
-    should_infer = parse_bool(with_inference, default=False)
 
-    if not should_infer:
-        return nodes
+    # Use robot's default_control_mode if not specified
+    if not control_mode or control_mode == 'default':
+        robot_cfg = robot_config.get('robot', {})
+        control_mode = robot_cfg.get('default_control_mode', 'teleop_act')
 
-    # Get control mode configuration
-    control_modes = robot_config.get("control_modes", {})
+    # Step 1: Generate inference node (if enabled)
+    try:
+        inference_node = generate_inference_node(robot_config, control_mode, use_sim)
+        if inference_node:
+            nodes.append(inference_node)
+    except Exception as e:
+        print(f"[robot_config] ERROR generating inference node: {e}")
+        # Don't raise - allow system to continue without inference
 
-    if control_mode not in control_modes:
-        print(f"[robot_config] WARNING: Control mode '{control_mode}' not found")
-        return nodes
-
-    mode_config = control_modes[control_mode]
-    inference_config = mode_config.get("inference", {})
-
-    if not inference_config.get("enabled", False):
-        print(f"[robot_config] Inference not enabled for mode '{control_mode}'")
-        return nodes
-
-    print(f"[robot_config] Creating inference nodes for mode '{control_mode}'")
-
-    # Get model configuration
-    model_name = inference_config.get("model")
-    models_config = robot_config.get("models", {})
-
-    if model_name not in models_config:
-        print(f"[robot_config] ERROR: Model '{model_name}' not found in robot_config")
-        return nodes
-
-    model_cfg = models_config[model_name]
-    model_path = model_cfg.get("path", "")
-
-    if not model_path:
-        print(f"[robot_config] ERROR: Model path not specified for '{model_name}'")
-        return nodes
-
-    print(f"[robot_config] Model: {model_name}")
-    print(f"[robot_config]   Path: {model_path}")
-
-    # Generate contract with normalization metadata
-    # TODO: Call contract generator here
-    # For now, use existing contract path
-    contract_name = f"{robot_config.get('name', 'robot')}_act"
-    contract_path = PathJoinSubstitution([
-        FindPackageShare('inference_service'),
-        'config/contracts',
-        f'{contract_name}.yaml'
-    ])
-
-    # Launch inference service
-    action_server = inference_config.get("action_server", "DispatchInfer")
-
-    nodes.append(Node(
-        package='inference_service',
-        executable='lerobot_policy_node',
-        name='act_inference_node',
-        parameters=[{
-            'model_path': model_path,
-            'contract_path': contract_path,
-            'passive_mode': True,
-            'device': 'auto',
-        }],
-        output='screen',
-    ))
-
-    print(f"[robot_config]   Action server: {action_server}")
-
-    # Launch action dispatcher
-    executor_mode = mode_config.get("executor", "topic")
-    enable_dual_mode = executor_mode == "topic"
-
-    nodes.append(Node(
-        package='action_dispatch',
-        executable='action_dispatcher_node',
-        name='action_dispatcher',
-        parameters=[{
-            'robot_name': robot_config.get('name', 'robot'),
-            'robot_config': robot_config.get('name', 'robot'),
-            'executor_mode': executor_mode,
-            'enable_dual_mode': enable_dual_mode,
-            'inference_action_server': action_server,
-            'queue_size': 100,
-            'watermark_threshold': 30,
-            'control_frequency': 100.0,
-        }],
-        output='screen',
-    ))
-
-    print(f"[robot_config]   Executor: {executor_mode}")
-    print(f"[robot_config]   Dual mode: {enable_dual_mode}")
+    # Step 2: Generate action dispatcher node (always needed)
+    try:
+        dispatcher_node = generate_action_dispatcher_node(
+            robot_config, control_mode, use_sim
+        )
+        nodes.append(dispatcher_node)
+    except Exception as e:
+        print(f"[robot_config] ERROR generating action dispatcher: {e}")
+        raise
 
     return nodes

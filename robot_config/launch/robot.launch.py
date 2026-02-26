@@ -39,7 +39,7 @@ from robot_config.utils import resolve_ros_path, parse_bool
 from robot_config.launch_builders.control import generate_ros2_control_nodes
 from robot_config.launch_builders.perception import generate_camera_nodes, generate_tf_nodes
 from robot_config.launch_builders.simulation import generate_gazebo_nodes
-from robot_config.launch_builders.execution import generate_action_dispatcher_node
+from robot_config.launch_builders.execution import generate_execution_nodes
 
 
 def load_robot_config(robot_config_name, config_path_override=None):
@@ -153,10 +153,17 @@ def launch_setup(context, *args, **kwargs):
     # ========== 6. Generate Perception Nodes ==========
     print(f"[robot_config] ========== Generating Perception Nodes ==========")
     try:
-        # Camera nodes
+        # Camera nodes (Physical drivers)
         camera_nodes = generate_camera_nodes(robot_config, use_sim)
         actions.extend(camera_nodes)
         print(f"[robot_config] Added {len(camera_nodes)} camera nodes")
+
+        # Virtual camera relay nodes (Topic tools)
+        from robot_config.launch_builders.perception import generate_virtual_camera_relays
+        virtual_nodes = generate_virtual_camera_relays(robot_config)
+        actions.extend(virtual_nodes)
+        if virtual_nodes:
+            print(f"[robot_config] Added {len(virtual_nodes)} virtual camera relays")
 
         # Static TF publishers
         tf_nodes = generate_tf_nodes(robot_config)
@@ -169,9 +176,20 @@ def launch_setup(context, *args, **kwargs):
     # ========== 7. Generate Execution Nodes ==========
     print(f"[robot_config] ========== Generating Execution Nodes ==========")
     try:
-        action_dispatcher_node = generate_action_dispatcher_node(robot_config, use_sim)
-        actions.append(action_dispatcher_node)
-        print(f"[robot_config] Added action dispatcher node")
+        # Get with_inference flag
+        with_inference = parse_bool(context.launch_configurations.get('with_inference', 'false'), default=False)
+        
+        if with_inference:
+            # Get the active control mode
+            active_control_mode = robot_config.get('default_control_mode', 'teleop_act')
+
+            # Generate execution nodes (inference + dispatcher)
+            # This automatically determines whether to launch inference based on config
+            execution_nodes = generate_execution_nodes(robot_config, active_control_mode, use_sim)
+            actions.extend(execution_nodes)
+            print(f"[robot_config] Added {len(execution_nodes)} execution nodes")
+        else:
+            print(f"[robot_config] Skipping execution nodes (with_inference=false)")
     except Exception as e:
         print(f"[robot_config] ERROR generating execution nodes: {e}")
         raise
@@ -208,6 +226,11 @@ def generate_launch_description():
             "control_mode",
             default_value="",
             description="Override control mode from YAML (teleop_act or moveit_planning). If empty, uses default_control_mode from config file",
+        ),
+        DeclareLaunchArgument(
+            "with_inference",
+            default_value="false",
+            description="Enable full execution pipeline (inference + dispatcher)",
         ),
         OpaqueFunction(function=launch_setup),
     ])
