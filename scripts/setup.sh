@@ -36,10 +36,28 @@ check_conda() {
 # Repository Management
 # ============================================================================
 update_submodules() {
-    # 自动检测：如果子模块目录已存在且包含 .git 文件夹，则跳过
+    echo ""
+    echo -e "${YELLOW}--- Git Submodule Management ---${NC}"
+    
+    local submodules_exist=false
     if [[ -d "libs/lerobot/.git" && -d "src/.git" ]]; then
-        log_info "Submodules already initialized. Skipping update."
-        return 0
+        submodules_exist=true
+    fi
+
+    if [[ "${submodules_exist}" == "true" ]]; then
+        log_info "Submodules are already initialized."
+        read -p "Do you want to sync/update submodules to the commits recorded in the main repo? (WARNING: This may fail or overwrite local changes) [y/N]: " CONFIRM
+        if [[ "${CONFIRM}" != "y" && "${CONFIRM}" != "Y" ]]; then
+            log_info "Skipping submodule update to preserve local changes."
+            return 0
+        fi
+    else
+        log_warn "Submodules not found or incomplete."
+        read -p "Initialize and clone submodules? [Y/n]: " CONFIRM
+        if [[ "${CONFIRM}" == "n" || "${CONFIRM}" == "N" ]]; then
+            log_error "Submodule initialization skipped. The workspace will be incomplete."
+            return 0
+        fi
     fi
 
     log_info "Updating git submodules (skipping LFS)..."
@@ -95,28 +113,50 @@ setup_developer_forks() {
 # Dependency Management
 # ============================================================================
 install_system_deps() {
-    log_info "Updating apt package lists..."
-    sudo apt-get update -qq
-    
-    log_info "Updating rosdep database..."
-    rosdep update --rosdistro=humble
-    
-    log_info "Installing ROS dependencies..."
-    rosdep install \
-        --from-paths src \
-        --ignore-src \
-        --rosdistro=humble \
-        -y -r \
-        --skip-keys "catkin roscpp lerobot trimesh[easy] simple-parsing cupy-cuda12x ctl_system_interface numpy_lessthan_2 ament_python feetech-servo-sdk pyserial"
+    if command -v apt-get &> /dev/null; then
+        log_info "Updating apt package lists..."
+        sudo apt-get update -qq
+        
+        log_info "Updating rosdep database..."
+        rosdep update --rosdistro=humble
+        
+        log_info "Installing ROS dependencies via apt..."
+        rosdep install \
+            --from-paths src \
+            --ignore-src \
+            --rosdistro=humble \
+            -y -r \
+            --skip-keys "catkin roscpp lerobot trimesh[easy] simple-parsing cupy-cuda12x ctl_system_interface numpy_lessthan_2 ament_python feetech-servo-sdk pyserial"
+    elif command -v dnf &> /dev/null; then
+        log_info "Updating dnf package repositories..."
+        # openEuler Embedded might not need full dnf update every time
+        
+        log_info "Updating rosdep database..."
+        rosdep update --rosdistro=humble
+        
+        log_info "Installing ROS dependencies via dnf..."
+        rosdep install \
+            --from-paths src \
+            --ignore-src \
+            --rosdistro=humble \
+            -y -r \
+            --skip-keys "catkin roscpp lerobot trimesh[easy] simple-parsing cupy-cuda12x ctl_system_interface numpy_lessthan_2 ament_python feetech-servo-sdk pyserial"
+    else
+        log_warn "Unknown package manager. Please ensure ROS 2 Humble dependencies are installed manually."
+    fi
 }
 
 setup_python_venv() {
     local venv_path="${WORKSPACE}/venv"
     
-    # 1. 确保系统级 venv 工具已安装
+    # 1. Ensure system-level venv tools are installed
     log_info "Checking for Python venv and pip..."
-    sudo apt-get update -qq
-    sudo apt-get install -y python3-venv python3-pip -qq
+    if command -v apt-get &> /dev/null; then
+        sudo apt-get update -qq
+        sudo apt-get install -y python3-venv python3-pip -qq
+    elif command -v dnf &> /dev/null; then
+        sudo dnf install -y python3-virtualenv python3-pip -q
+    fi
 
     # 2. 创建虚拟环境 (必须包含 --system-site-packages 以使用系统的 rclpy)
     if [[ ! -d "${venv_path}" ]]; then
@@ -133,6 +173,10 @@ setup_python_venv() {
     # 升级 pip
     python3 -m pip install --upgrade pip --quiet
     
+    # 核心修复：强制安装 NumPy 1.x 以兼容 ROS 2 系统组件
+    log_info "Ensuring NumPy 1.x compatibility..."
+    python3 -m pip install "numpy<2" --quiet
+
     # 解决 setuptools 版本冲突 (兼容 LeRobot 和 colcon)
     python3 -m pip install "setuptools<80" "setuptools>=71" --quiet
     
