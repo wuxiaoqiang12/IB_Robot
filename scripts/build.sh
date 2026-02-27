@@ -154,11 +154,21 @@ ensure_python_deps
 # Install lerobot from libs/
 # ============================================================================
 if [[ -d "${WORKSPACE}/libs/lerobot" ]]; then
-    echo "[INFO] Installing lerobot..."
-    # Use constraints to prevent NumPy 2.x (NGC PyTorch compiled against NumPy 1.x)
-    # and pin tokenizers for transformers compatibility
-    pip install "${WORKSPACE}/libs/lerobot"
-        # --constraint <(echo -e "numpy<2\ntokenizers>=0.21,<0.22") \
+    # Force use of venv pip to prevent pollution of ROS 2 install directory
+    PIP_BIN="${WORKSPACE}/venv/bin/pip"
+    if [[ ! -f "${PIP_BIN}" ]]; then
+        echo "[ERROR] Virtual environment not found at ${WORKSPACE}/venv. Please run setup.sh first."
+        exit 1
+    fi
+
+    echo "[INFO] Installing lerobot into venv (editable mode)..."
+    # Use -e to handle src-layout correctly and point to source instead of copying
+    "${PIP_BIN}" install -e "${WORKSPACE}/libs/lerobot" --quiet
+    
+    # Critical Fix: Force-reinstall compatible versions WITHIN venv
+    # This ensures NumPy 1.x for ROS 2 Humble compatibility and avoids NumPy 2.x/OpenCV 4.12 issues
+    echo "[INFO] Re-aligning dependencies for ROS 2 compatibility..."
+    "${PIP_BIN}" install "numpy<2" "opencv-python-headless<4.12" --quiet
 fi
 
 # ============================================================================
