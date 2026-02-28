@@ -1,0 +1,38 @@
+from setuptools import setup
+
+package_name = 'inference_service'
+
+setup(
+    name=package_name,
+    version='0.1.0',
+    packages=[package_name],
+    data_files=[
+        ('share/ament_index/resource_index/packages',
+         ['resource/' + package_name]),
+        ('share/' + package_name, ['package.xml']),
+    ],
+    install_requires=[
+        'rclpy',
+        'sensor_msgs',
+        'geometry_msgs',
+        'diagnostic_msgs',
+        'trajectory_msgs',
+        'std_msgs',
+    ],
+    zip_safe=True,
+    maintainer='xqw',
+    maintainer_email='wuxiaoqiang.rtos@huawei.com',
+    description='Multi-model inference service for IB-Robot integration',
+    license='Apache-2.0',
+    tests_require=['pytest'],
+    python_requires='>=3.8',
+    entry_points={
+        'console_scripts': [
+            'lerobot_policy_node = inference_service.lerobot_policy_node:main',
+            'yolo_graspnet_node = inference_service.yolo_graspnet_node:main',
+            'mock_inference_node = inference_service.mock_inference_node:main',
+            'simple_mock_inference = inference_service.simple_mock_inference:main',
+            'test_system = inference_service.test_system:main',
+        ],
+    },
+)
