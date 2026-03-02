@@ -275,39 +275,34 @@ def synthesize_contract(robot_config: Dict, control_mode: str) -> Dict[str, Any]
                 print(f"[robot_config] Observation: {lerobot_key} ← {obs_entry['topic']}")
 
     # Step 5: Build action mapping from controller joints
-    controller_joints = []
+    actions = []
+    
     for ctrl_name in mode_config['controllers']:
-        if 'position_controller' in ctrl_name:
-            # Extract joints from controller
-            if 'arm' in ctrl_name:
-                # Add arm joints if not already present
-                for j in robot_config['joints']['arm']:
-                    if j not in controller_joints:
-                        controller_joints.append(j)
-            elif 'gripper' in ctrl_name:
-                # Add gripper joints if not already present
-                for j in robot_config['joints']['gripper']:
-                    if j not in controller_joints:
-                        controller_joints.append(j)
-            elif 'all' in ctrl_name or not controller_joints:
-                controller_joints = robot_config['joints']['all'].copy()
+        if 'position_controller' not in ctrl_name:
+            continue
+            
+        # Determine joints for this specific controller
+        current_ctrl_joints = []
+        if 'arm' in ctrl_name:
+            current_ctrl_joints = robot_config['joints']['arm']
+        elif 'gripper' in ctrl_name:
+            current_ctrl_joints = robot_config['joints']['gripper']
+        elif 'all' in ctrl_name:
+            current_ctrl_joints = robot_config['joints']['all']
+        
+        if not current_ctrl_joints:
+            continue
 
-    # Fallback: if no joints found, use all joints
-    if not controller_joints:
-        controller_joints = robot_config['joints']['all'].copy()
-
-    # Convert joint names to selector format (position.1, position.2, etc.)
-    joint_selector_names = [f"position.{name}" for name in controller_joints]
-
-    # Build actions as LIST (rosetta format)
-    actions = [
-        {
-            'key': 'action',
+        # Convert to selector format (position.1, position.2, etc.)
+        joint_selector_names = [f"position.{name}" for name in current_ctrl_joints]
+        
+        action_entry = {
+            'key': f"action_{ctrl_name}",
             'selector': {
                 'names': joint_selector_names
             },
             'publish': {
-                'topic': '/arm_position_controller/commands',
+                'topic': f"/{ctrl_name}/commands",
                 'type': 'std_msgs/msg/Float64MultiArray',
                 'layout': 'flat',
                 'qos': {
@@ -322,8 +317,25 @@ def synthesize_contract(robot_config: Dict, control_mode: str) -> Dict[str, Any]
             },
             'safety_behavior': 'hold'
         }
-    ]
-    print(f"[robot_config] Action space: {len(controller_joints)} joints → /arm_position_controller/commands")
+        actions.append(action_entry)
+        print(f"[robot_config] Action mapping: {ctrl_name} ({len(current_ctrl_joints)} joints) → {action_entry['publish']['topic']}")
+
+    # Fallback if no controllers found
+    if not actions:
+        all_joints = robot_config['joints']['all']
+        joint_selector_names = [f"position.{name}" for name in all_joints]
+        actions = [{
+            'key': 'action',
+            'selector': {'names': joint_selector_names},
+            'publish': {
+                'topic': '/arm_position_controller/commands',
+                'type': 'std_msgs/msg/Float64MultiArray',
+                'layout': 'flat',
+                'qos': {'reliability': 'best_effort', 'history': 'keep_last', 'depth': 10},
+                'strategy': {'mode': 'nearest', 'tolerance_ms': 500}
+            },
+            'safety_behavior': 'hold'
+        }]
 
     # Step 6: Assemble contract with rosetta-compliant structure
     contract = {
@@ -353,7 +365,9 @@ def synthesize_contract(robot_config: Dict, control_mode: str) -> Dict[str, Any]
 
     print(f"[robot_config] ✓ Contract synthesis SUCCESS")
     print(f"[robot_config]   Observations: {len(observations)}")
-    print(f"[robot_config]   Actions: {len(controller_joints)} joints")
+    
+    total_joints = sum(len(a['selector']['names']) for a in actions)
+    print(f"[robot_config]   Actions: {total_joints} joints")
     return contract
 
 
