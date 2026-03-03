@@ -357,8 +357,8 @@
 		<parent link="gripper" />
 		<child link="jaw" />
 		<axis xyz="0 0 1" />
-		<!-- calibrated limits: raw(2041,3457) home(2749) = (-1.0858,+1.0858) rad -->
-		<limit effort="10" velocity="10" lower="-1.0858" upper="1.0858"/>
+		<!-- Gripper joint: 0.0 = closed, 1.0 = open (similar to SO-ARM100) -->
+		<limit effort="10" velocity="10" lower="0.0" upper="1.0"/>
 	</joint>
 
 	<transmission name="6_trans">
@@ -440,7 +440,7 @@
 		<parent link="shoulder" />
 		<child link="upper_arm" />
 		<axis xyz="0 0 1" />
-		<limit effort="10" velocity="10" lower="-1.74533" upper="1.74533" />
+		<limit effort="10" velocity="10" lower="-1.92" upper="1.92" />
 	</joint>
 
 	<transmission name="2_trans">

@@ -65,7 +65,7 @@ robot:
         type: topic  # topic | action
         mode: teleop_act
         queue_size: 100
-        control_frequency: 100.0
+        control_frequency: 50.0
 
     moveit_planning:
       description: "MoveIt trajectory planning mode (VoxPoser/VLM)"

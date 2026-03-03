@@ -18,13 +18,6 @@ hardware_interface::CallbackReturn SO101SystemHardware::on_init(
   port_ = info_.hardware_parameters["port"];
   calib_file_ = info_.hardware_parameters["calib_file"];
 
-  // Read optional reset_positions parameter (JSON string)
-  reset_positions_str_ = "";
-  if (info_.hardware_parameters.find("reset_positions") != info_.hardware_parameters.end())
-  {
-    reset_positions_str_ = info_.hardware_parameters["reset_positions"];
-  }
-
   hw_positions_.resize(info_.joints.size(), 0.0);
   hw_velocities_.resize(info_.joints.size(), 0.0);
   hw_commands_.resize(info_.joints.size(), 0.0);
@@ -48,7 +41,6 @@ hardware_interface::CallbackReturn SO101SystemHardware::on_configure(
 {
   RCLCPP_INFO(rclcpp::get_logger("SO101SystemHardware"), "Configuring...");
 
-  // Load calibration
   std::ifstream f(calib_file_);
   if (!f.is_open())
   {
@@ -63,38 +55,6 @@ hardware_interface::CallbackReturn SO101SystemHardware::on_configure(
     homing_offsets_[motor_ids_[i]] = calib[id_str]["homing_offset"];
     range_mins_[motor_ids_[i]] = calib[id_str]["range_min"];
     range_maxes_[motor_ids_[i]] = calib[id_str]["range_max"];
-  }
-
-  // Parse reset_positions if provided
-  if (!reset_positions_str_.empty())
-  {
-    try
-    {
-      auto reset_json = nlohmann::json::parse(reset_positions_str_);
-      // Reset positions can be formatted as "1": value, "2": value, etc.
-      // Map joint IDs to array indices
-      for (size_t i = 0; i < motor_ids_.size(); i++)
-      {
-        std::string id_str = std::to_string(motor_ids_[i]);
-        if (reset_json.contains(id_str))
-        {
-          reset_positions_[i] = reset_json[id_str];
-        }
-      }
-      has_reset_positions_ = true;
-      RCLCPP_INFO(rclcpp::get_logger("SO101SystemHardware"), "Reset positions configured from parameter");
-    }
-    catch (const std::exception& e)
-    {
-      RCLCPP_WARN(rclcpp::get_logger("SO101SystemHardware"), "Failed to parse reset_positions JSON: %s", e.what());
-      RCLCPP_WARN(rclcpp::get_logger("SO101SystemHardware"), "Will preserve current motor positions on startup");
-      has_reset_positions_ = false;
-    }
-  }
-  else
-  {
-    RCLCPP_INFO(rclcpp::get_logger("SO101SystemHardware"), "No reset_positions configured - will preserve current motor positions on startup");
-    has_reset_positions_ = false;
   }
 
   RCLCPP_INFO(rclcpp::get_logger("SO101SystemHardware"), "Configured!");
@@ -126,7 +86,6 @@ hardware_interface::CallbackReturn SO101SystemHardware::on_activate(
   const rclcpp_lifecycle::State &)
 {
   RCLCPP_INFO(rclcpp::get_logger("SO101SystemHardware"), "Activating...");
-  RCLCPP_INFO(rclcpp::get_logger("SO101SystemHardware"), "Port: %s", port_.c_str());
 
   if (!sms_sts_.begin(1000000, port_.c_str()))
   {
@@ -134,54 +93,90 @@ hardware_interface::CallbackReturn SO101SystemHardware::on_activate(
     return hardware_interface::CallbackReturn::ERROR;
   }
 
-  // Initialize sync read buffer (2 bytes for position, 100ms timeout)
-  sms_sts_.syncReadBegin(motor_ids_.size(), 2, 100);
-
-  if (has_reset_positions_)
+  // 0. Robustness check: Ping each motor to ensure it is connected and responsive
+  for (size_t i = 0; i < motor_ids_.size(); i++)
   {
-    // Move to configured reset positions
-    RCLCPP_INFO(rclcpp::get_logger("SO101SystemHardware"), "Moving to configured reset positions...");
+    u8 id = motor_ids_[i];
+    int retry = 3;
+    bool found = false;
+    while (retry--) {
+      if (sms_sts_.Ping(id) != -1) {
+        found = true;
+        break;
+      }
+      usleep(10000); // 10ms wait between retries
+    }
+    
+    if (!found) {
+      RCLCPP_ERROR(rclcpp::get_logger("SO101SystemHardware"), 
+        "Motor ID %d is NOT responding! Check cables and power.", id);
+      return hardware_interface::CallbackReturn::FAILURE;
+    }
+    RCLCPP_DEBUG(rclcpp::get_logger("SO101SystemHardware"), "Motor ID %d found.", id);
+  }
+
+  const double TICKS_PER_RAD = 4096.0 / (2.0 * M_PI);
+
+  // 1. Configure Hardware: Write Offsets, PID, and Return Delay
+  for (size_t i = 0; i < motor_ids_.size(); i++)
+  {
+    u8 id = motor_ids_[i];
+    
+    // 1.1 Disable torque before configuration
+    sms_sts_.EnableTorque(id, 0); 
+    usleep(2000); // Small delay
+    
+    // 1.2 Unlock EPROM to allow parameter writing
+    sms_sts_.unLockEprom(id);
+    usleep(2000);
+    
+    // CORRECT Sign-Magnitude encoding for STS series (Sign bit is 11)
+    int offset = homing_offsets_[id];
+    u16 encoded_offset = (offset < 0) ? (static_cast<u16>(std::abs(offset)) | (1 << 11)) : static_cast<u16>(offset);
+    
+    RCLCPP_DEBUG(rclcpp::get_logger("SO101SystemHardware"), "Setting ID %d: Homing Offset=%d (Encoded: %u)", id, offset, encoded_offset);
+    
+    sms_sts_.writeWord(id, 31, encoded_offset); 
+    sms_sts_.writeWord(id, 9, range_mins_[id]);   
+    sms_sts_.writeWord(id, 11, range_maxes_[id]); 
+    
+    sms_sts_.writeByte(id, 7, 0);   
+    sms_sts_.writeByte(id, 21, 16); 
+    sms_sts_.writeByte(id, 22, 32); 
+    sms_sts_.writeByte(id, 23, 0);  
+    usleep(2000);
+
+    // 1.3 Lock EPROM after configuration to persist parameters
+    sms_sts_.LockEprom(id);
+    usleep(2000);
+    
+    // 1.4 Enable torque after configuration
+    sms_sts_.EnableTorque(id, 1);
+    usleep(2000);
+  }
+
+  // 2. Initialize sync read buffer (Reduced timeout to 10ms for stability)
+  sms_sts_.syncReadBegin(motor_ids_.size(), 2, 10);
+
+  // Initial sync
+  if (sms_sts_.syncReadPacketTx(motor_ids_.data(), motor_ids_.size(), 56, 2) > 0)
+  {
     for (size_t i = 0; i < motor_ids_.size(); i++)
     {
-      // Convert radians to raw motor position
-      double range = range_maxes_[motor_ids_[i]] - range_mins_[motor_ids_[i]];
-      target_positions_[i] = (reset_positions_[i] / (2.0 * M_PI) + 0.5) * range + range_mins_[motor_ids_[i]];
-      target_speeds_[i] = 0;
-      target_accs_[i] = 0;
-
-      // Initialize commands and positions to reset values
-      hw_commands_[i] = reset_positions_[i];
-      hw_positions_[i] = reset_positions_[i];
-    }
-    // Use sync write
-    sms_sts_.SyncWritePosEx(motor_ids_.data(), motor_ids_.size(), target_positions_.data(), target_speeds_.data(), target_accs_.data());
-    RCLCPP_INFO(rclcpp::get_logger("SO101SystemHardware"), "Activated! Moving to reset positions.");
-  }
-  else
-  {
-    // Preserve current motor positions
-    RCLCPP_INFO(rclcpp::get_logger("SO101SystemHardware"), "Reading current motor positions...");
-    
-    // Use sync read to get all positions at once
-    if (sms_sts_.syncReadPacketTx(motor_ids_.data(), motor_ids_.size(), 56, 2) > 0)
-    {
-      for (size_t i = 0; i < motor_ids_.size(); i++)
+      u8 id = motor_ids_[i];
+      u8 data[2];
+      if (sms_sts_.syncReadPacketRx(id, data) == 2)
       {
-        u8 data[2];
-        if (sms_sts_.syncReadPacketRx(motor_ids_[i], data) == 2)
-        {
-          s16 pos = sms_sts_.syncReadRxPacketToWrod(15);
-          // Convert raw position to radians and set as initial command
-          double range = range_maxes_[motor_ids_[i]] - range_mins_[motor_ids_[i]];
-          double rad = ((pos - range_mins_[motor_ids_[i]]) / range - 0.5) * 2.0 * M_PI;
-          hw_commands_[i] = rad;
-          hw_positions_[i] = rad;
-        }
+        s16 pos = (data[1] << 8) | data[0];
+        double rad = (static_cast<double>(pos) - 2048.0) / TICKS_PER_RAD;
+        hw_commands_[i] = rad;
+        hw_positions_[i] = rad;
+        RCLCPP_DEBUG(rclcpp::get_logger("SO101SystemHardware"), "Initial Sync ID %d: RAW=%d -> RAD=%.4f", id, pos, rad);
       }
     }
-    RCLCPP_INFO(rclcpp::get_logger("SO101SystemHardware"), "Activated! Preserving current motor positions.");
   }
 
+  RCLCPP_INFO(rclcpp::get_logger("SO101SystemHardware"), "Activated! Control loop running.");
   return hardware_interface::CallbackReturn::SUCCESS;
 }
 
@@ -189,46 +184,36 @@ hardware_interface::CallbackReturn SO101SystemHardware::on_deactivate(
   const rclcpp_lifecycle::State &)
 {
   RCLCPP_INFO(rclcpp::get_logger("SO101SystemHardware"), "Deactivating...");
-
-  // Disable torque on all motors before disconnecting
   for (size_t i = 0; i < motor_ids_.size(); i++)
   {
     sms_sts_.EnableTorque(motor_ids_[i], 0);
   }
-
-  // Wait a brief moment for torque to be disabled
-  usleep(100000); // 100ms
-
-  // End sync read
+  usleep(100000);
   sms_sts_.syncReadEnd();
-
-  // Disconnect from serial port
   sms_sts_.end();
-
-  RCLCPP_INFO(rclcpp::get_logger("SO101SystemHardware"), "Deactivated! Motors torques disabled.");
   return hardware_interface::CallbackReturn::SUCCESS;
 }
 
 hardware_interface::return_type SO101SystemHardware::read(
   const rclcpp::Time &, const rclcpp::Duration &)
 {
-  // 1. Send sync read packet for Present_Position (MemAddr 56, length 2)
+  static rclcpp::Clock steady_clock(RCL_STEADY_TIME);
+
   int read_len = sms_sts_.syncReadPacketTx(motor_ids_.data(), motor_ids_.size(), 56, 2);
-  if (read_len == 0) {
-    return hardware_interface::return_type::OK; // Or ERROR depending on robustness needs
+  if (read_len <= 0) {
+    RCLCPP_WARN_THROTTLE(rclcpp::get_logger("SO101SystemHardware"), steady_clock, 500, "SyncRead PacketTx FAILED");
+    return hardware_interface::return_type::OK;
   }
+
+  const double TICKS_PER_RAD = 4096.0 / (2.0 * M_PI);
 
   for (size_t i = 0; i < motor_ids_.size(); i++)
   {
-    // 2. Parse position from the received batch
     u8 data[2];
     if (sms_sts_.syncReadPacketRx(motor_ids_[i], data) == 2)
     {
-      s16 pos = sms_sts_.syncReadRxPacketToWrod(15); // Decode 2 bytes with 15th bit as sign
-      
-      // Convert raw position to radians
-      double range = range_maxes_[motor_ids_[i]] - range_mins_[motor_ids_[i]];
-      hw_positions_[i] = ((pos - range_mins_[motor_ids_[i]]) / range - 0.5) * 2.0 * M_PI;
+      s16 pos = (data[1] << 8) | data[0];
+      hw_positions_[i] = (static_cast<double>(pos) - 2048.0) / TICKS_PER_RAD;
     }
   }
   return hardware_interface::return_type::OK;
@@ -237,16 +222,22 @@ hardware_interface::return_type SO101SystemHardware::read(
 hardware_interface::return_type SO101SystemHardware::write(
   const rclcpp::Time &, const rclcpp::Duration &)
 {
-  // SyncWritePosEx requires target arrays
+  static rclcpp::Clock steady_clock(RCL_STEADY_TIME);
+  const double TICKS_PER_RAD = 4096.0 / (2.0 * M_PI);
+
   for (size_t i = 0; i < motor_ids_.size(); i++)
   {
-    double range = range_maxes_[motor_ids_[i]] - range_mins_[motor_ids_[i]];
-    target_positions_[i] = (hw_commands_[i] / (2.0 * M_PI) + 0.5) * range + range_mins_[motor_ids_[i]];
-    target_speeds_[i] = 0;
-    target_accs_[i] = 0;
+    double target_raw = hw_commands_[i] * TICKS_PER_RAD + 2048.0;
+    
+    // Safety clamp to [0, 4095]
+    if (target_raw < 0) target_raw = 0;
+    if (target_raw > 4095) target_raw = 4095;
+
+    target_positions_[i] = static_cast<s16>(target_raw);
+    target_speeds_[i] = 2400; 
+    target_accs_[i] = 50;
   }
 
-  // Send all positions in one packet
   sms_sts_.SyncWritePosEx(motor_ids_.data(), motor_ids_.size(), target_positions_.data(), target_speeds_.data(), target_accs_.data());
   
   return hardware_interface::return_type::OK;
