@@ -28,6 +28,7 @@ Options:
   --list-mixins            List available mixins and exit
   --clean                  Clean build (cmake-clean-cache)
   --this                   Build only packages in current directory
+  -v, --verbose            Show detailed build output
   -h, --help               Show this help
 
 Common mixins:
@@ -71,6 +72,7 @@ list_mixins() {
 MIXINS=()
 CLEAN_BUILD=false
 BUILD_THIS=false
+VERBOSE=false
 EXTRA_ARGS=()
 
 while [[ $# -gt 0 ]]; do
@@ -92,6 +94,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --this)
             BUILD_THIS=true
+            shift
+            ;;
+        -v|--verbose)
+            VERBOSE=true
             shift
             ;;
         -h|--help)
@@ -201,11 +207,16 @@ echo "════════════════════════�
 echo "Building with mixin(s): ${MIXINS[*]}"
 echo "════════════════════════════════════════════════════════════════════"
 
+# Select event handlers based on verbosity
+EVENT_HANDLERS="status- summary-"
+${VERBOSE} && EVENT_HANDLERS="console_cohesion+"
+
 colcon build \
     --continue-on-error \
     --parallel-workers "$(nproc)" \
     --merge-install \
-    --event-handlers console_cohesion+ \
+    --event-handlers ${EVENT_HANDLERS} \
+    --cmake-args -Wno-dev \
     --base-paths src \
     "${MIXIN_ARGS[@]}" \
     "${CLEAN_ARGS[@]}" \
