@@ -1,0 +1,6 @@
+[submodule "libs/lerobot"]
+    path = libs/lerobot
+    url = git@gitcode.com:openeuler/lerobot_ros2.git
+    branch = master
+    ignore = dirty
+    ignore = dirty

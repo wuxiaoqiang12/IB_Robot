@@ -1,0 +1,20 @@
+# colcon/CMake output
+build
+install
+log
+models
+datasets
+logs
+venv
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+.claude
+.gemini
+.marscode
+.trae
+.opencode
+openspec

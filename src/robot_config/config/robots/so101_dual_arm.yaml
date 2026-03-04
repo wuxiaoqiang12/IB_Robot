@@ -1,0 +1,189 @@
+# SO-101 Dual Arm Robot Configuration
+# This configuration defines the complete hardware setup for dual SO-101 arms
+# (e.g., ALOHA setup) with cameras for bimanual manipulation.
+
+robot:
+  name: so101_dual_arm
+  type: so101_dual
+  robot_type: aloha  # For LeRobot dataset metadata
+
+  # ros2_control configuration
+  ros2_control:
+    hardware_plugin: so101_hardware/SO101SystemHardware
+    # For dual arms, you'll need separate hardware plugins or a unified one
+    # This example assumes a single plugin managing both arms
+    port: /dev/ttyACM0
+    calib_file: $(env HOME)/.calibrate/so101_dual_calibrate.json
+    urdf_path: $(find robot_description)/urdf/lerobot/so101/so101_dual.urdf.xacro
+
+  # Peripheral devices (cameras, microphones, etc.)
+  peripherals:
+    # Top-down view camera
+    - type: camera
+      name: top
+      driver: opencv
+      index: 0
+      width: 640
+      height: 480
+      fps: 30
+      pixel_format: bgr8
+      frame_id: camera_top_frame
+      optical_frame_id: camera_top_optical_frame
+      transform:
+        parent_frame: base_link
+        x: 0.0
+        y: 0.0
+        z: 0.5
+        roll: 0.0
+        pitch: 0.0
+        yaw: 0.0
+
+    # Left wrist camera
+    - type: camera
+      name: left_wrist
+      driver: opencv
+      index: 2
+      width: 640
+      height: 480
+      fps: 60
+      pixel_format: bgr8
+      frame_id: camera_left_wrist_frame
+      optical_frame_id: camera_left_wrist_optical_frame
+      transform:
+        parent_frame: left_wrist_link
+        x: 0.0
+        y: 0.0
+        z: 0.0
+        roll: 0.0
+        pitch: 0.0
+        yaw: 0.0
+
+    # Right wrist camera
+    - type: camera
+      name: right_wrist
+      driver: opencv
+      index: 4
+      width: 640
+      height: 480
+      fps: 60
+      pixel_format: bgr8
+      frame_id: camera_right_wrist_frame
+      optical_frame_id: camera_right_wrist_optical_frame
+      transform:
+        parent_frame: right_wrist_link
+        x: 0.0
+        y: 0.0
+        z: 0.0
+        roll: 0.0
+        pitch: 0.0
+        yaw: 0.0
+
+  # Rosetta contract integration
+  contract:
+    base_contract: $(find rosetta)/contracts/aloha_act.yaml
+    rate_hz: 20
+    max_duration_s: 90.0
+
+    observations:
+      - key: observation.images.top
+        topic: /camera/top
+        peripheral: top
+        image:
+          resize: [480, 640]
+        align:
+          strategy: hold
+          stamp: header
+          tol_ms: 1500
+        qos:
+          reliability: best_effort
+          history: keep_last
+          depth: 10
+
+      - key: observation.images.left_wrist
+        topic: /camera/left_wrist
+        peripheral: left_wrist
+        image:
+          resize: [480, 640]
+        align:
+          strategy: hold
+          stamp: header
+          tol_ms: 1500
+        qos:
+          reliability: best_effort
+          history: keep_last
+          depth: 10
+
+      - key: observation.images.right_wrist
+        topic: /camera/right_wrist
+        peripheral: right_wrist
+        image:
+          resize: [480, 640]
+        align:
+          strategy: hold
+          stamp: header
+          tol_ms: 1500
+        qos:
+          reliability: best_effort
+          history: keep_last
+          depth: 10
+
+      - key: observation.state
+        topic: /joint_states
+        selector:
+          names:
+            # Left arm (leader)
+            - position.leader_arm:shoulder_pan
+            - position.leader_arm:shoulder_lift
+            - position.leader_arm:elbow_flex
+            - position.leader_arm:wrist_flex
+            - position.leader_arm:wrist_roll
+            - position.leader_arm:gripper
+            # Right arm (follower)
+            - position.follower_arm:shoulder_pan
+            - position.follower_arm:shoulder_lift
+            - position.follower_arm:elbow_flex
+            - position.follower_arm:wrist_flex
+            - position.follower_arm:wrist_roll
+            - position.follower_arm:gripper
+        align:
+          strategy: hold
+          stamp: header
+          tol_ms: 1500
+        qos:
+          reliability: best_effort
+          history: keep_last
+          depth: 50
+
+    actions:
+      - key: action
+        selector:
+          names:
+            # Left arm (leader)
+            - position.leader_arm:shoulder_pan
+            - position.leader_arm:shoulder_lift
+            - position.leader_arm:elbow_flex
+            - position.leader_arm:wrist_flex
+            - position.leader_arm:wrist_roll
+            - position.leader_arm:gripper
+            # Right arm (follower)
+            - position.follower_arm:shoulder_pan
+            - position.follower_arm:shoulder_lift
+            - position.follower_arm:elbow_flex
+            - position.follower_arm:wrist_flex
+            - position.follower_arm:wrist_roll
+            - position.follower_arm:gripper
+        publish:
+          topic: /joint_commands
+          type: sensor_msgs/msg/JointState
+          layout: flat
+          qos:
+            reliability: best_effort
+            history: keep_last
+            depth: 10
+          strategy:
+            mode: nearest
+            tolerance_ms: 500
+        safety_behavior: hold
+
+    recording:
+      storage: mcap

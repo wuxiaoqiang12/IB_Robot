@@ -1,0 +1,18 @@
+build:
+  debug:
+    cmake-args: ["-DCMAKE_BUILD_TYPE=Debug", "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"]
+  release:
+    cmake-args: ["-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"]
+  rel-with-deb-info:
+    cmake-args: ["-DCMAKE_BUILD_TYPE=RelWithDebInfo", "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"]
+  test:
+    cmake-args: ["-DBUILD_TESTING=ON"]
+  no-test:
+    cmake-args: ["-DBUILD_TESTING=OFF"]
+  lint:
+    cmake-args: ["-DBUILD_TESTING=ON", "-DAMENT_LINT_AUTO=ON"]
+  dev:
+    symlink-install: true
+    cmake-args: ["-DCMAKE_BUILD_TYPE=Debug", "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON", "-DBUILD_TESTING=OFF"]
+  prod:
+    cmake-args: ["-DCMAKE_BUILD_TYPE=Release", "-DBUILD_TESTING=OFF", "-DTRACETOOLS_DISABLED=ON"]

@@ -1,0 +1,9 @@
+<library path="so101_hardware_interface">
+  <class name="so101_hardware/SO101SystemHardware"
+         type="so101_hardware::SO101SystemHardware"
+         base_class_type="hardware_interface::SystemInterface">
+    <description>
+      Native C++ ros2_control hardware interface for SO-101 Follower arm with direct Feetech servo communication
+    </description>
+  </class>
+</library>

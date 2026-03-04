@@ -1,0 +1,28 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "ROS2: Debug Python Node (Current File)",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/libs/lerobot_ros2:${workspaceFolder}/venv/lib/python3.10/site-packages:/opt/ros/humble/lib/python3.10/site-packages:${PYTHONPATH}"
+            }
+        },
+        {
+            "name": "ROS2: Action Dispatcher Node",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/action_dispatch/action_dispatch/action_dispatcher_node.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--ros-args", "-p", "robot_name:=test_single_arm_single_cam"
+            ],
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/libs/lerobot_ros2:${workspaceFolder}/venv/lib/python3.10/site-packages:/opt/ros/humble/lib/python3.10/site-packages:${PYTHONPATH}"
+            }
+        }
+    ]
+}
