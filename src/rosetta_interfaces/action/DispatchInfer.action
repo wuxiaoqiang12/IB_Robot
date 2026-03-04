@@ -1,0 +1,17 @@
+# Goal: Request inference at specific timestamp
+# Dispatcher only sends timestamp and metadata
+# Inference service samples observations from its own StreamBuffer
+builtin_interfaces/Time obs_timestamp  # Request observations at this timestamp
+string prompt                            # Optional task prompt
+string inference_id                      # Unique request ID (UUID4)
+---
+# Result: Action chunk from model
+VariantsList action_chunk               # Action sequence from model
+int32 chunk_size                        # Number of actions returned
+bool success                            # Inference success
+string message                          # Error message if failed
+float64 inference_latency_ms            # Time from goal receipt to result
+---
+# Feedback: Progress updates
+float32 progress                        # Inference progress (0.0-1.0)
+string status                           # Status message

@@ -1,0 +1,261 @@
+# SO-101 Single Arm Robot Configuration
+# This configuration defines the complete hardware setup for a single SO-101 arm
+# with cameras for imitation learning.
+
+robot:
+  name: so101_single_arm
+  type: so101
+  robot_type: so_101  # For LeRobot dataset metadata
+
+  # ============================================
+  # Model Library (新增)
+  # ============================================
+  models:
+    so101_act:
+      path: /home/xqw/Research/IB_Robot/models/502000/pretrained_model
+      policy_type: act
+      # Normalization parameters (optional, for future use)
+      normalization:
+        action_scale: [0.0314, 0.0314, 0.0314, 0.0314, 0.0314, 0.0008]
+        action_offset: [0.0, 0.0, 0.0, 0.0, 0.0, 0.04]
+
+  # ============================================
+  # Unified joint definitions (Single Source of Truth)
+  # ============================================
+  joints:
+    arm:
+      - "1"
+      - "2"
+      - "3"
+      - "4"
+      - "5"
+    gripper:
+      - "6"
+    all: ["1", "2", "3", "4", "5", "6"]
+
+  # Control mode management
+  default_control_mode: "teleop_act"
+
+  control_modes:
+    teleop_act:
+      description: "High-frequency end-to-end control mode (ACT/pi0)"
+      description_cn: "高频端到端控制模式（ACT/pi0）"
+      controllers:
+        - joint_state_broadcaster
+        - arm_position_controller
+        - gripper_position_controller
+      # ============================================
+      # Inference configuration (新增)
+      # ============================================
+      inference:
+        enabled: true
+        model: so101_act
+        action_server: /inference/dispatch
+        observations:
+          - source: wrist
+            key: images.wrist
+          - source: top
+            key: images.top
+          - source: joint_states
+            key: state
+      # ============================================
+      # Executor configuration (新增)
+      # ============================================
+      executor:
+        type: topic  # topic | action
+        mode: teleop_act
+        queue_size: 100
+        control_frequency: 50.0
+
+    moveit_planning:
+      description: "MoveIt trajectory planning mode (VoxPoser/VLM)"
+      description_cn: "MoveIt轨迹规划模式（VoxPoser/VLM）"
+      controllers:
+        - joint_state_broadcaster
+        - arm_trajectory_controller
+        - gripper_trajectory_controller
+      inference:
+        enabled: false  # MoveIt模式不需要推理
+      executor:
+        type: action
+        mode: moveit_planning
+
+  # ros2_control configuration
+  ros2_control:
+    hardware_plugin: so101_hardware/SO101SystemHardware
+    port: /dev/ttyACM1
+    calib_file: $(env HOME)/.calibrate/so101_follower_calibrate.json
+    joint_names: ["1", "2", "3", "4", "5", "6"]
+    # Reset positions (optional)
+    reset_positions:
+      "1": 0.0
+      "2": 0.0
+      "3": 0.0
+      "4": 0.0
+      "5": 0.0
+    urdf_path: $(find robot_description)/urdf/lerobot/so101/so101.urdf.xacro
+
+    # Controllers configuration
+    # Path to the controllers configuration file (YAML format)
+    controllers_config: $(find so101_hardware)/config/so101_controllers.yaml
+
+    # List of controllers to auto-start
+    # These controllers will be automatically spawned when the robot launches
+    controllers:
+      - joint_state_broadcaster  # Publishes joint states to /joint_states
+      - arm_controller           # Controls the robot arm joints
+      - gripper_controller       # Controls the gripper
+
+  # Peripheral devices (cameras, microphones, etc.)
+  peripherals:
+    - type: camera
+      name: top
+      driver: opencv
+      index: 0
+      width: 640
+      height: 480
+      fps: 30
+      pixel_format: mjpeg2rgb
+      frame_id: camera_top_frame
+      optical_frame_id: camera_top_optical_frame
+      # Camera position relative to parent frame (base_link)
+      transform:
+        parent_frame: base
+        x: 0.0
+        y: 0.0
+        z: 0.5  # 50cm above base
+        roll: 0.0
+        pitch: 0.0
+        yaw: 0.0
+      # Optional: camera calibration URL (standard ROS2 location)
+      # camera_info_url: file://$(env HOME)/.ros/camera_info/top_camera.yaml
+
+    - type: camera
+      name: wrist
+      driver: opencv
+      index: 2
+      width: 640
+      height: 480
+      fps: 60
+      pixel_format: mjpeg2rgb
+      frame_id: camera_wrist_frame
+      optical_frame_id: camera_wrist_optical_frame
+      # Camera position relative to parent frame
+      transform:
+        parent_frame: wrist
+        x: 0.0
+        y: 0.0
+        z: 0.0
+        roll: 0.0
+        pitch: 0.0
+        yaw: 0.0
+      # camera_info_url: file://$(env HOME)/.ros/camera_info/wrist_camera.yaml
+
+    - type: camera
+      name: front
+      driver: realsense
+      serial_number: ""  # Optional: specific serial number
+      width: 640
+      height: 480
+      fps: 30
+      pixel_format: bgr8
+      enable_pointcloud: false
+      align_depth: true
+      frame_id: camera_front_link
+      optical_frame_id: camera_front_optical_frame
+      # Camera position relative to base_link
+      transform:
+        parent_frame: base
+        x: 0.1
+        y: 0.0
+        z: 0.2
+        roll: 0.0
+        pitch: 0.0
+        yaw: 0.0
+
+  # Rosetta contract integration
+  contract:
+    base_contract: $(find rosetta)/contracts/act_grab_pan.yaml
+    rate_hz: 20
+    max_duration_s: 90.0
+
+    observations:
+      - key: observation.images.front
+        topic: /camera/front
+        peripheral: front
+        image:
+          resize: [480, 640]
+        align:
+          strategy: hold
+          stamp: header
+          tol_ms: 1500
+        qos:
+          reliability: best_effort
+          history: keep_last
+          depth: 10
+
+      - key: observation.images.top
+        topic: /camera/top
+        peripheral: top  # References camera 'top' from peripherals above
+        image:
+          resize: [480, 640]  # height, width for LeRobot
+        align:
+          strategy: hold
+          stamp: header
+          tol_ms: 1500
+        qos:
+          reliability: best_effort
+          history: keep_last
+          depth: 10
+
+      - key: observation.images.wrist
+        topic: /camera/wrist
+        peripheral: wrist  # References camera 'wrist' from peripherals above
+        image:
+          resize: [480, 640]
+        align:
+          strategy: hold
+          stamp: header
+          tol_ms: 1500
+        qos:
+          reliability: best_effort
+          history: keep_last
+          depth: 10
+
+      - key: observation.state
+        topic: /joint_states
+        selector: { names: ["1", "2", "3", "4", "5", "6"] }
+        align:
+          strategy: hold
+          stamp: header
+          tol_ms: 1500
+        qos:
+          reliability: best_effort
+          history: keep_last
+          depth: 50
+
+    actions:
+      - key: action
+        selector:
+          names:
+            - position.follower_arm:shoulder_pan
+            - position.follower_arm:shoulder_lift
+            - position.follower_arm:elbow_flex
+            - position.follower_arm:wrist_flex
+            - position.follower_arm:wrist_roll
+            - position.follower_arm:gripper
+        publish:
+          topic: /arm_position_controller/commands
+          type: std_msgs/msg/Float64MultiArray
+          layout: flat
+          qos:
+            reliability: best_effort
+            history: keep_last
+            depth: 10
+          strategy:
+            mode: nearest
+            tolerance_ms: 500
+        safety_behavior: hold  # 'zeros' to send zeros, 'hold' to maintain last command
+
+    recording:
+      storage: mcap
