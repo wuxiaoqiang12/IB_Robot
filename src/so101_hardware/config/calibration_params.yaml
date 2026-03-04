@@ -1,0 +1,29 @@
+# Calibration parameters
+
+# Serial port
+serial_port: "/dev/ttyACM0"
+
+# Calibration output path
+output_directory: "~/.calibrate"
+
+# Motor configurations
+motors:
+  "1":
+    id: 1
+    model: "sts3215"
+  "2":
+    id: 2
+    model: "sts3215"
+  "3":
+    id: 3
+    model: "sts3215"
+  "4":
+    id: 4
+    model: "sts3215"
+  "5":
+    id: 5
+    model: "sts3215"
+    full_turn: true
+  "6":
+    id: 6
+    model: "sts3215"

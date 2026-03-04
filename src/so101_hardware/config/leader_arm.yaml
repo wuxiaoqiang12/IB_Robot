@@ -1,0 +1,13 @@
+# Leader arm configuration
+
+# Serial port
+serial_port: "/dev/ttyACM0"
+
+# Publishing rate
+publish_rate: 50.0  # Hz
+
+# Calibration file path
+calib_file: "~/.calibrate/so101_leader.json"
+
+# Topic namespace
+namespace: "so101_leader"
