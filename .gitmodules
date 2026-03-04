@@ -4,3 +4,6 @@
     branch = master
     ignore = dirty
     ignore = dirty
+[submodule "src/pymoveit2"]
+	path = src/pymoveit2
+	url = https://github.com/AndrejOrsula/pymoveit2.git
