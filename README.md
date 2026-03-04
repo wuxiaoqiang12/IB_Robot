@@ -1,0 +1,3 @@
+# IB_Robot
+
+Save the code of IB-Robot, an AI robot execution framework developed by openEuler Embedded for embodied intelligence scenarios. It includes references to the forked version of tensormsg, references to lerobot fork, code references to the lerobot_ros2:ros2_ws branch, as well as some code related to development usability.
