@@ -1,11 +1,19 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>robot_interface</name>
+  <name>tensormsg</name>
   <version>0.0.0</version>
-  <description>Robot hardware interface, mainly for LeRobot built-in robots</description>
-  <maintainer email="haoyida542@gmail.com">ch3cooh</maintainer>
+  <description>TODO: Package description</description>
+  <maintainer email="wuxiaoqiang.rtos@huawei.com">xqw</maintainer>
   <license>TODO: License declaration</license>
+
+  <depend>rclpy</depend>
+  <depend>sensor_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>control_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>rosetta_interfaces</depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>

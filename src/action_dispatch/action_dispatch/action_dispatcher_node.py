@@ -26,7 +26,7 @@ from std_srvs.srv import Empty
 from rosetta_interfaces.action import DispatchInfer
 from rosetta_interfaces.msg import VariantsList
 from rosetta.common.contract_utils import load_contract, iter_specs
-from rosetta.common.decoders import dec_variant_list
+from tensormsg.converter import TensorMsgConverter
 
 from .topic_executor import TopicExecutor
 
@@ -161,7 +161,7 @@ class ActionDispatcherNode(Node):
 
         # Decode VariantsList to Numpy
         # Assuming result.action_chunk is VariantsList containing 'action' key
-        batch = dec_variant_list(result.action_chunk)
+        batch = TensorMsgConverter.from_variant(result.action_chunk)
         if 'action' in batch:
             action_chunk = batch['action'] # Could be Tensor or Numpy
             

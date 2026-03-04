@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, asdict
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
 import hashlib
 import json
@@ -19,6 +19,10 @@ from rclpy.qos import (
     HistoryPolicy,
     DurabilityPolicy,
 )
+
+# Bridge to tensormsg for global registry
+import tensormsg.registry as tensormsg_registry
+from tensormsg import register_encoder, register_decoder
 
 # ---------- Contract datamodel ----------
 
@@ -55,20 +59,7 @@ class ObservationSpec:
 
 @dataclass(frozen=True, slots=True)
 class ActionSpec:
-    """Action stream description (publisher settings + mapping).
-
-    YAML (example):
-      actions:
-        - key: action
-          publish:
-            topic: /cmd_vel
-            type: geometry_msgs/msg/Twist
-            qos: { reliability: best_effort, history: keep_last, depth: 10 }
-            strategy: { mode: nearest, tolerance_ms: 500 }
-          selector: { names: [linear.x, angular.z] }
-          from_tensor: { clamp: [-2.0, 2.0] }
-          safety_behavior: hold
-    """
+    """Action stream description (publisher settings + mapping)."""
 
     key: str
     publish_topic: str
@@ -134,7 +125,6 @@ def load_contract(path: Path | str) -> Contract:
 
     def _act(it: Dict[str, Any]) -> ActionSpec:
         pub = it["publish"]
-        # new: read top-level safety_behavior (default "zeros")
         sb = str(it.get("safety_behavior", "zeros")).lower().strip()
         if sb not in ("zeros", "hold"):
             sb = "zeros"
@@ -178,10 +168,6 @@ def load_contract(path: Path | str) -> Contract:
     )
 
 
-# ---------- QoS mapping (shared) ----------
-# Note: qos_profile_from_dict moved to processing_utils.py
-
-
 # ---------- Unified SpecView (runtime) ----------
 
 
@@ -205,78 +191,50 @@ class SpecView:
 
 
 def _num_channels_from_encoding(encoding: str) -> int:
-    """Infer channel count from ROS image encoding (based on sensor_msgs/image_encodings.h)."""
+    """Infer channel count from ROS image encoding."""
     enc = encoding.lower()
-    
-    # Common-case encodings
     if enc in ("mono8", "mono16"):
         return 1
     if enc in ("bgr8", "rgb8", "bgr16", "rgb16"):
         return 3
     if enc in ("bgra8", "rgba8", "bgra16", "rgba16"):
         return 4
-    
-    # Bayer encodings (all single channel)
-    if enc in ("bayer_rggb8", "bayer_bggr8", "bayer_gbrg8", "bayer_grbg8",
-               "bayer_rggb16", "bayer_bggr16", "bayer_gbrg16", "bayer_grbg16"):
-        return 4
-    
-    # Generic content encodings (8UC1, 16UC3, 32FC1, etc.)
     abstract_prefixes = ["8uc", "8sc", "16uc", "16sc", "32sc", "32fc", "64fc"]
     for prefix in abstract_prefixes:
         if enc.startswith(prefix):
             if len(enc) == len(prefix):
-                return 1  # e.g., 8UC -> 1
+                return 1
             try:
-                # Extract channel count from suffix (e.g., 8UC3 -> 3)
                 channel_str = enc[len(prefix):]
                 if channel_str.isdigit():
                     return int(channel_str)
             except (ValueError, IndexError):
                 pass
-    
-    # Special cases
     if enc == "yuv422":
         return 2
-    
-    # Default fallback for unknown encodings
-    return 3  # assume RGB for unknown encodings
+    return 3
 
 
 def iter_specs(contract: Contract) -> Iterable[SpecView]:
     """Yield normalized runtime specs for observations and actions."""
-    # Observations
     for o in contract.observations:
         resize = None
-        # Smart default encoding based on topic name and key
-        default_enc = "bgr8"  # default for color images
-        
-        # Heuristic: if topic/key contains "depth", assume depth encoding
+        default_enc = "bgr8"
         if "depth" in o.topic.lower() or "depth" in o.key.lower():
-            default_enc = "32fc1"  # common depth encoding
-        
+            default_enc = "32fc1"
         if o.image:
             r = o.image.get("resize")
             if r and len(r) == 2:
                 resize = (int(r[0]), int(r[1]))
-            # Only use contract encoding if explicitly specified (for shape inference)
             if "encoding" in o.image:
                 default_enc = str(o.image.get("encoding")).lower()
-        
-        # Infer channels from default encoding (for dataset shape)
-        # At runtime, decoder will read actual msg.encoding
         channels = _num_channels_from_encoding(default_enc)
-        
-        # Special case: depth images are always replicated to 3 channels by the decoder
         if "depth" in o.topic.lower() or "depth" in o.key.lower():
             channels = 3
-            
         if o.image and "channels" in o.image:
-            channels = int(o.image["channels"])  # explicit override
-
+            channels = int(o.image["channels"])
         names = list((o.selector or {}).get("names", []))
-        al = o.align or AlignSpec()  # default: hold/0ms/receive
-
+        al = o.align or AlignSpec()
         yield SpecView(
             key=o.key,
             topic=o.topic,
@@ -284,7 +242,7 @@ def iter_specs(contract: Contract) -> Iterable[SpecView]:
             is_action=False,
             names=names,
             image_resize=resize,
-            image_encoding=default_enc,  # Used for shape inference only
+            image_encoding=default_enc,
             image_channels=channels,
             resample_policy=al.strategy,
             asof_tol_ms=int(al.tol_ms),
@@ -292,15 +250,12 @@ def iter_specs(contract: Contract) -> Iterable[SpecView]:
             clamp=None,
             safety_behavior=None,
         )
-
-    # Actions
     for a in contract.actions:
         names = list((a.selector or {}).get("names", []))
         clamp: Optional[Tuple[float, float]] = None
         if a.from_tensor and "clamp" in a.from_tensor:
             lo, hi = a.from_tensor["clamp"]
             clamp = (float(lo), float(hi))
-
         yield SpecView(
             key=a.key,
             topic=a.publish_topic,
@@ -309,8 +264,8 @@ def iter_specs(contract: Contract) -> Iterable[SpecView]:
             names=names,
             image_resize=None,
             image_encoding="bgr8",
-            image_channels=3,  # actions don't use images
-            resample_policy="hold",  # actions are outputs
+            image_channels=3,
+            resample_policy="hold",
             asof_tol_ms=0,
             stamp_src=contract.timestamp_source,
             clamp=clamp,
@@ -318,13 +273,9 @@ def iter_specs(contract: Contract) -> Iterable[SpecView]:
         )
 
 
-# ---------- LeRobot feature helpers ----------
-
-
 def feature_from_spec(
     spec: SpecView, use_videos: bool
 ) -> Tuple[str, Dict[str, Any], bool]:
-    """Return (key, feature_meta, is_image)."""
     if spec.image_resize:
         h, w = int(spec.image_resize[0]), int(spec.image_resize[1])
         dtype = "video" if use_videos else "image"
@@ -337,90 +288,55 @@ def feature_from_spec(
             },
             True,
         )
-
     if not spec.names:
-        raise ValueError(
-            f"{spec.key}: vector features must specify selector.names")
-
+        raise ValueError(f"{spec.key}: vector features must specify selector.names")
     return (
         spec.key,
-        {"dtype": "float32", "shape": (
-            len(spec.names),), "names": list(spec.names)},
+        {"dtype": "float32", "shape": (len(spec.names),), "names": list(spec.names)},
         False,
     )
 
 
-# ---------- Decoder/Encoder registries ----------
+# ---------- Decoder/Encoder registries (Bridged to tensormsg) ----------
 
-DecoderFn = Callable[[Any, Any], Any]
-DECODERS: Dict[str, DecoderFn] = {}
+# Maintain compatibility with local DECODERS/ENCODERS dictionaries
+DECODERS = tensormsg_registry.DECODER_REGISTRY
+ENCODERS = tensormsg_registry.ENCODER_REGISTRY
 
-
-def register_decoder(type_str: str):
-    """Decorator to register a decoder for a given ROS type string."""
-
-    def _wrap(fn: DecoderFn):
-        DECODERS[type_str] = fn
-        return fn
-
-    return _wrap
-
-
-EncoderFn = Callable[[list[str], Any, Any], Any]
-ENCODERS: Dict[str, EncoderFn] = {}
-
-
-def register_encoder(type_str: str):
-    """Decorator to register an encoder for a given ROS type string."""
-
-    def _wrap(fn: EncoderFn):
-        ENCODERS[type_str] = fn
-        return fn
-
-    return _wrap
+# register_decoder and register_encoder are already imported from tensormsg
 
 
 # ---------- Time helpers ----------
 
 
 def stamp_from_header_ns(msg) -> Optional[int]:
-    """Extract a monotonic-ish nanosecond timestamp from a ROS Header."""
     try:
         st = msg.header.stamp
         ts_ns = int(st.sec) * 1_000_000_000 + int(st.nanosec)
         if ts_ns == 0:
-            print(f"[WARN] Zero timestamp detected in header, treating as invalid (falling back to bag time)")
             return None
         return ts_ns
     except (AttributeError, TypeError, ValueError):
         return None
 
 
-# ---------- Decoders (ROS -> numpy/str) ----------
+# ---------- Decoders (Bridged) ----------
 
 
 def decode_value(ros_type: str, msg, spec) -> Any:
-    """Decode a ROS message using a registered decoder."""
-    fn = DECODERS.get(ros_type)
-    if not fn:
-        raise ValueError(f"No decoder registered for ROS type: {ros_type}")
-    return fn(msg, spec)
+    """Decode a ROS message using tensormsg through the rosetta API."""
+    from tensormsg.converter import TensorMsgConverter
+    return TensorMsgConverter.decode(msg, spec)
 
 
-# ---------- Resampling (offline) ----------
+# ---------- Resampling ----------
 
 
-def resample_hold(
-    ts_ns: np.ndarray, vals: List[Any], ticks_ns: np.ndarray
-) -> List[Any]:
-    """Classic last-value-hold: for each tick, carry forward the last sample."""
+def resample_hold(ts_ns: np.ndarray, vals: List[Any], ticks_ns: np.ndarray) -> List[Any]:
     out: List[Any] = []
     j, last = 0, None
-
-    # If we have data but the first tick is before the first data, use the first data for early ticks
     if len(ts_ns) > 0 and len(ticks_ns) > 0 and ticks_ns[0] < ts_ns[0]:
-        last = vals[0]  # Use first available data
-
+        last = vals[0]
     for t in ticks_ns:
         while j + 1 < len(ts_ns) and ts_ns[j + 1] <= t:
             j += 1
@@ -433,7 +349,6 @@ def resample_hold(
 def resample_asof(
     ts_ns: np.ndarray, vals: List[Any], ticks_ns: np.ndarray, tol_ns: int
 ) -> List[Optional[Any]]:
-    """As-of: last value only if not older than tol_ns at the tick; else None."""
     if tol_ns <= 0:
         return resample_hold(ts_ns, vals, ticks_ns)
     out: List[Optional[Any]] = []
@@ -449,7 +364,6 @@ def resample_asof(
 def resample_drop(
     ts_ns: np.ndarray, vals: List[Any], ticks_ns: np.ndarray, step_ns: int
 ) -> List[Optional[Any]]:
-    """Drop: only return a value if it arrived within (t - step_ns, t]."""
     out: List[Optional[Any]] = []
     j, n = -1, len(ts_ns)
     for t in ticks_ns:
@@ -467,7 +381,6 @@ def resample(
     step_ns: int,
     tol_ms: int,
 ) -> List[Any]:
-    """Dispatch resampling policy: 'hold' | 'asof' | 'drop'."""
     if policy == "drop":
         return resample_drop(ts_ns, vals, ticks_ns, step_ns)
     if policy == "asof":
@@ -475,12 +388,7 @@ def resample(
     return resample_hold(ts_ns, vals, ticks_ns)
 
 
-# ---------- Live resampling (online) ----------
-
-
 class StreamBuffer:
-    """Constant-memory online resampler."""
-
     def __init__(self, policy: str, step_ns: int, tol_ns: int = 0):
         self.policy = policy
         self.step_ns = int(step_ns)
@@ -489,12 +397,10 @@ class StreamBuffer:
         self.last_val: Optional[Any] = None
 
     def push(self, ts_ns: int, val: Any) -> None:
-        """Insert a sample; monotonicity is not required (we keep the newest)."""
         if self.last_ts is None or ts_ns >= self.last_ts:
             self.last_ts, self.last_val = ts_ns, val
 
     def sample(self, tick_ns: int):
-        """Sample according to policy at a given tick."""
         if self.last_ts is None:
             return None
         if self.policy == "drop":
@@ -503,11 +409,10 @@ class StreamBuffer:
             return self.last_val if (tick_ns - self.last_ts <= self.tol_ns) else None
         if self.policy == "hold":
             return self.last_val
-        else:
-            return None
+        return None
 
 
-# ---------- Encoders (numpy -> ROS) ----------
+# ---------- Encoders (Bridged) ----------
 
 
 def encode_value(
@@ -516,18 +421,15 @@ def encode_value(
     action_vec: Sequence[float],
     clamp: Optional[Tuple[float, float]] = None,
 ):
-    """Encode a flat action vector into a ROS message using a registered encoder."""
-    fn = ENCODERS.get(ros_type)
-    if not fn:
-        raise ValueError(f"No encoder registered for ROS type: {ros_type}")
-    return fn(names, action_vec, clamp)
+    """Encode an action vector using tensormsg."""
+    from tensormsg.converter import TensorMsgConverter
+    return TensorMsgConverter.encode(ros_type, action_vec, names, clamp)
 
 
 # ---------- QoS utilities ----------
 
 
 def qos_profile_from_dict(d: Optional[Dict[str, Any]]) -> Optional[QoSProfile]:
-    """Convert a dictionary to a ROS QoS profile."""
     if not d:
         return None
     rel = str(d.get("reliability", "reliable")).lower()
@@ -556,10 +458,8 @@ def qos_profile_from_dict(d: Optional[Dict[str, Any]]) -> Optional[QoSProfile]:
 
 
 def zero_pad(feature_meta: Dict[str, Any]) -> Any:
-    """Allocate a zero/empty default for the given feature meta description."""
     dtype = feature_meta["dtype"]
     shape = tuple(feature_meta.get("shape") or ())
-
     if dtype in ("video", "image"):
         return np.zeros(shape, dtype=np.float32)
     if dtype == "float32":
@@ -572,59 +472,32 @@ def zero_pad(feature_meta: Dict[str, Any]) -> Any:
 
 
 def contract_fingerprint(contract) -> str:
-    """Generate a deterministic fingerprint for a contract to detect changes.
-    
-    This fingerprint captures the essential structure of the contract that affects
-    data processing, allowing training to validate that the policy was trained
-    with the same contract structure as the serving environment.
-    
-    Args:
-        contract: Either a dict or Contract dataclass instance
-        
-    Returns:
-        A hex string representing the contract fingerprint.
-    """
-    # Convert Contract dataclass to dict if needed
-    if hasattr(contract, '__dataclass_fields__'):
+    if hasattr(contract, "__dataclass_fields__"):
         contract_dict = asdict(contract)
     else:
         contract_dict = contract
-    # Extract key structural elements that affect data processing
     fingerprint_data = {
-        "meta": contract_dict.get("meta", {}),
-        "topics": contract_dict.get("topics", {}),
-        "types": contract_dict.get("types", {}),
-        "order": contract_dict.get("order", {}),
+        "name": contract_dict.get("name"),
         "observations": [],
-        "actions": []
+        "actions": [],
     }
-
-    # Add observation specs
     for obs in contract_dict.get("observations", []):
-        fingerprint_data["observations"].append({
-            "key": obs.get("key"),
-            "topic": obs.get("topic"),
-            "ros_type": obs.get("ros_type"),
-            "selector": obs.get("selector", {}),
-            "align": obs.get("align", {}),
-            "image_resize": obs.get("image_resize"),
-            "image_channels": obs.get("image_channels")
-        })
-
-    # Add action specs
+        fingerprint_data["observations"].append(
+            {
+                "key": obs.get("key"),
+                "topic": obs.get("topic"),
+                "type": obs.get("type"),
+                "selector": obs.get("selector"),
+            }
+        )
     for act in contract_dict.get("actions", []):
-        fingerprint_data["actions"].append({
-            "key": act.get("key"),
-            "topic": act.get("topic"),
-            "ros_type": act.get("ros_type"),
-            "selector": act.get("selector", {}),
-            "publish_qos": act.get("publish_qos", {}),
-            "safety_behavior": act.get("safety_behavior")
-        })
-
-    # Create deterministic JSON string and hash it
-    json_str = json.dumps(fingerprint_data, sort_keys=True, separators=(',', ':'))
-    return hashlib.sha256(json_str.encode('utf-8')).hexdigest()[:16]
-
-
-# Note: decoders and encoders are imported separately when needed to avoid circular imports
+        fingerprint_data["actions"].append(
+            {
+                "key": act.get("key"),
+                "publish_topic": act.get("publish_topic"),
+                "type": act.get("type"),
+                "selector": act.get("selector"),
+            }
+        )
+    json_str = json.dumps(fingerprint_data, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(json_str.encode("utf-8")).hexdigest()[:16]

@@ -35,8 +35,7 @@ from rosetta.common.contract_utils import (
     SpecView,
     StreamBuffer,
 )
-from rosetta.common.decoders import dec_variant_list
-from rosetta.common.encoders import enc_variant_list
+from tensormsg.converter import TensorMsgConverter
 
 
 def _device_from_param(requested: Optional[str] = None) -> torch.device:
@@ -137,7 +136,8 @@ class VariantPolicyBridge(Node):
 
         # Setup publisher for inference output (raw action)
         self._cbg = ReentrantCallbackGroup()
-        variant_msg_cls = get_message("rosetta_interfaces/msg/VariantsList")
+        from rosetta_interfaces.msg import VariantsList
+        variant_msg_cls = VariantsList
         
         self._action_pub = self.create_publisher(
             variant_msg_cls,
@@ -164,7 +164,7 @@ class VariantPolicyBridge(Node):
     def _variant_cb(self, msg) -> None:
         """Callback for VariantsList messages."""
         try:
-            batch = dec_variant_list(msg, self.device)
+            batch = TensorMsgConverter.from_variant(msg, self.device)
             self._variant_buffer = batch
         except Exception as e:
             self.get_logger().error(f"Failed to decode VariantsList: {e!r}")
@@ -176,19 +176,12 @@ class VariantPolicyBridge(Node):
             self.get_logger().warning("No variants in buffer, skipping inference")
             return
 
-        # self.get_logger().info("Sampled batch for inference:")
-        # for k in batch:
-        #     if isinstance(batch[k], torch.Tensor):
-        #         self.get_logger().info(f"Sampled {k}: shape {batch[k].shape}, dtype {batch[k].dtype}")
-        #     else:
-        #         self.get_logger().info(f"Sampled {k}: {batch[k]}")
-
         with torch.inference_mode():
             action = self.policy.select_action(batch)
         
         # Publish raw action as VariantsList (no post-processing here)
         action_batch = {"action": action}
-        variant_msg = enc_variant_list(action_batch)
+        variant_msg = TensorMsgConverter.to_variant(action_batch)
         self._action_pub.publish(variant_msg)
 
 

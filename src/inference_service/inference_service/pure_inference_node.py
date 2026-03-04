@@ -24,8 +24,7 @@ from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 
-from rosetta.common.decoders import dec_variant_list
-from rosetta.common.encoders import enc_variant_list
+from tensormsg.converter import TensorMsgConverter
 from rosetta_interfaces.msg import VariantsList
 
 
@@ -141,7 +140,7 @@ class PureInferenceNode(Node):
     def _inference_cb(self, msg: VariantsList):
         """Run inference on preprocessed input."""
         try:
-            batch = dec_variant_list(msg, self._device)
+            batch = TensorMsgConverter.from_variant(msg, self._device)
 
             with torch.no_grad():
                 if self._use_action_chunking:
@@ -152,7 +151,7 @@ class PureInferenceNode(Node):
 
             # Publish as VariantsList
             result = {"action": action}
-            out_msg = enc_variant_list(result)
+            out_msg = TensorMsgConverter.to_variant(result)
             self._pub.publish(out_msg)
 
         except Exception as e:

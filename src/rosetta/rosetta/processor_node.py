@@ -27,8 +27,7 @@ from rosetta.common.contract_utils import (
     stamp_from_header_ns,
     encode_value,
 )
-from rosetta.common.encoders import enc_variant_list
-from rosetta.common.decoders import dec_variant_list
+from tensormsg.converter import TensorMsgConverter
 import torch
 from time import perf_counter
 
@@ -204,7 +203,7 @@ class ProcessorNode(Node):
     # ---------------- Sub callback ----------------
     def _obs_cb(self, msg, spec: SpecView) -> None:
         use_header = (spec.stamp_src ==
-                      "header") or self._params.use_header_time
+                      "header")
         ts = stamp_from_header_ns(msg) if use_header else None
         ts_ns = int(
             ts) if ts is not None else self.get_clock().now().nanoseconds
@@ -216,7 +215,7 @@ class ProcessorNode(Node):
     def _action_cb(self, msg) -> None:
         """Callback for inference output - apply post-processing and publish actions."""
         try:
-            batch = dec_variant_list(msg, self.device)
+            batch = TensorMsgConverter.from_variant(msg, self.device)
             action = batch.get("action")
             if action is None:
                 self.get_logger().warning("No 'action' key in inference output")
@@ -292,7 +291,7 @@ class ProcessorNode(Node):
         batch = self._prepare(obs_frame)
         batch = self.preprocessor(batch)
         start_time = perf_counter()
-        variant_msg = enc_variant_list(batch)
+        variant_msg = TensorMsgConverter.to_variant(batch)
         end_time = perf_counter()
         # self.get_logger().info(f"Encode time: {(end_time - start_time)*1000:.4f} ms")
         self._variant_pub.publish(variant_msg)

@@ -33,7 +33,7 @@ from rosetta.common.contract_utils import (
     iter_specs,
     load_contract,
 )
-from rosetta.common.decoders import dec_variant_list
+from tensormsg.converter import TensorMsgConverter
 from rosetta_interfaces.msg import VariantsList
 
 
@@ -147,7 +147,7 @@ class PostprocessorComponent(Node):
     def _action_cb(self, msg: VariantsList):
         """Callback for inference output - apply post-processing and publish."""
         try:
-            batch = dec_variant_list(msg, self._device)
+            batch = TensorMsgConverter.from_variant(msg, self._device)
             action = batch.get("action")
             if action is None:
                 self.get_logger().warning("No 'action' key in VariantsList")
