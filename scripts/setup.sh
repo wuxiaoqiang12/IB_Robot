@@ -40,22 +40,22 @@ update_submodules() {
     echo -e "${YELLOW}--- Git Submodule Management ---${NC}"
     
     local submodules_exist=false
-    if [[ -d "libs/lerobot/.git" && -d "src/.git" ]]; then
+    if [[ -d "libs/lerobot/.git" ]]; then
         submodules_exist=true
     fi
 
     if [[ "${submodules_exist}" == "true" ]]; then
-        log_info "Submodules are already initialized."
-        read -p "Do you want to sync/update submodules to the commits recorded in the main repo? (WARNING: This may fail or overwrite local changes) [y/N]: " CONFIRM
+        log_info "Submodules (libs/lerobot) are already initialized."
+        read -p "Do you want to sync/update submodules? [y/N]: " CONFIRM
         if [[ "${CONFIRM}" != "y" && "${CONFIRM}" != "Y" ]]; then
-            log_info "Skipping submodule update to preserve local changes."
+            log_info "Skipping submodule update."
             return 0
         fi
     else
         log_warn "Submodules not found or incomplete."
-        read -p "Initialize and clone submodules? [Y/n]: " CONFIRM
+        read -p "Initialize and clone submodules (libs/lerobot)? [Y/n]: " CONFIRM
         if [[ "${CONFIRM}" == "n" || "${CONFIRM}" == "N" ]]; then
-            log_error "Submodule initialization skipped. The workspace will be incomplete."
+            log_error "Submodule initialization skipped."
             return 0
         fi
     fi
@@ -68,44 +68,42 @@ update_submodules() {
 setup_developer_forks() {
     echo ""
     echo -e "${YELLOW}--- Developer Fork Setup ---${NC}"
-    echo "If you have forked the repositories on GitCode, enter your username"
-    echo "to automatically set up your personal forks as 'origin' and the"
-    echo "original repositories as 'upstream'."
+    echo "If you have forked the repository on GitCode, enter your username"
+    echo "to automatically set up your personal fork as 'origin' and the"
+    echo "original repository as 'upstream'."
     echo ""
     read -p "Enter your GitCode username (leave empty to skip): " USERNAME
 
     if [[ -n "${USERNAME}" ]]; then
+        local MAIN_FORK="git@gitcode.com:${USERNAME}/IB_Robot.git"
         local LEROBOT_FORK="git@gitcode.com:${USERNAME}/lerobot_ros2.git"
-        local LEDOG_FORK="git@gitcode.com:${USERNAME}/ledog_ros2.git"
 
         echo -e "\nProposed Fork URLs:"
+        echo -e "  Main Repo:    ${MAIN_FORK}"
         echo -e "  libs/lerobot: ${LEROBOT_FORK}"
-        echo -e "  src:          ${LEDOG_FORK}"
         echo ""
         read -p "Confirm setting these as 'origin'? [y/N]: " CONFIRM
 
         if [[ "${CONFIRM}" == "y" || "${CONFIRM}" == "Y" ]]; then
-            log_info "Configuring personal forks (local only)..."
+            log_info "Configuring personal forks..."
             
-            # Get original URLs (upstream)
-            local LEROBOT_UPSTREAM=$(git config -f .gitmodules submodule.libs/lerobot.url)
-            local LEDOG_UPSTREAM=$(git config -f .gitmodules submodule.src.url)
+            # 1. Update main repo remotes
+            git remote set-url origin "${MAIN_FORK}"
+            git remote add upstream git@atomgit.com:openeuler/IB_Robot.git 2>/dev/null || git remote set-url upstream git@atomgit.com:openeuler/IB_Robot.git
 
-            # 1. Update origin URLs inside submodules directly
-            # This doesn't touch .gitmodules
-            (cd libs/lerobot && git remote set-url origin "${LEROBOT_FORK}")
-            (cd src && git remote set-url origin "${LEDOG_FORK}")
+            # 2. Update submodule fork
+            if [[ -d "libs/lerobot/.git" ]]; then
+                (cd libs/lerobot && git remote set-url origin "${LEROBOT_FORK}")
+                local LEROBOT_UPSTREAM=$(git config -f .gitmodules submodule.libs/lerobot.url)
+                (cd libs/lerobot && git remote add upstream "${LEROBOT_UPSTREAM}" 2>/dev/null || git remote set-url upstream "${LEROBOT_UPSTREAM}")
+            fi
 
-            # 2. Add/Update upstream remotes
-            (cd libs/lerobot && git remote add upstream "${LEROBOT_UPSTREAM}" 2>/dev/null || git remote set-url upstream "${LEROBOT_UPSTREAM}")
-            (cd src && git remote add upstream "${LEDOG_UPSTREAM}" 2>/dev/null || git remote set-url upstream "${LEDOG_UPSTREAM}")
-
-            log_info "Forks configured locally! .gitmodules remains pointing to upstream."
+            log_info "Forks configured successfully!"
         else
             log_info "Fork setup cancelled."
         fi
     else
-        log_info "Skipping fork setup. Using default repositories."
+        log_info "Skipping fork setup."
     fi
 }
 
