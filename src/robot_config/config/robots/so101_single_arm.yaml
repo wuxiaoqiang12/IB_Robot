@@ -83,7 +83,7 @@ robot:
   # ros2_control configuration
   ros2_control:
     hardware_plugin: so101_hardware/SO101SystemHardware
-    port: /dev/ttyACM0
+    port: /dev/ttyACM1
     calib_file: $(env HOME)/.calibrate/so101_follower_calibrate.json
     joint_names: ["1", "2", "3", "4", "5", "6"]
     # Reset positions (optional)
@@ -120,7 +120,7 @@ robot:
       optical_frame_id: camera_top_optical_frame
       # Camera position relative to parent frame (base_link)
       transform:
-        parent_frame: base_link
+        parent_frame: base
         x: 0.0
         y: 0.0
         z: 0.5  # 50cm above base
@@ -142,7 +142,7 @@ robot:
       optical_frame_id: camera_wrist_optical_frame
       # Camera position relative to parent frame
       transform:
-        parent_frame: wrist_link
+        parent_frame: wrist
         x: 0.0
         y: 0.0
         z: 0.0
@@ -165,7 +165,7 @@ robot:
       optical_frame_id: camera_front_optical_frame
       # Camera position relative to base_link
       transform:
-        parent_frame: base_link
+        parent_frame: base
         x: 0.1
         y: 0.0
         z: 0.2
