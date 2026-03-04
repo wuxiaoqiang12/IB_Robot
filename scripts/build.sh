@@ -12,7 +12,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE="${WORKSPACE:-$(dirname "${SCRIPT_DIR}")}"
-MIXIN_DIR="${WORKSPACE}/colcon/mixin"
+MIXIN_DIR="${WORKSPACE}/.colcon/mixin"
 
 # ============================================================================
 # Help & Mixin Listing
@@ -191,7 +191,7 @@ cd "${WORKSPACE}"
 # Build mixin arguments
 MIXIN_ARGS=()
 if [[ -f "${MIXIN_DIR}/build.mixin.yaml" ]]; then
-    MIXIN_ARGS+=("--mixin-files" "${MIXIN_DIR}"/*.yaml)
+    MIXIN_ARGS+=("--mixin-files" "${MIXIN_DIR}/build.mixin.yaml")
     MIXIN_ARGS+=("--mixin" "${MIXINS[@]}")
 fi
 
@@ -215,6 +215,7 @@ colcon build \
     --continue-on-error \
     --parallel-workers "$(nproc)" \
     --merge-install \
+    --symlink-install \
     --event-handlers ${EVENT_HANDLERS} \
     --cmake-args -Wno-dev \
     --base-paths src \
