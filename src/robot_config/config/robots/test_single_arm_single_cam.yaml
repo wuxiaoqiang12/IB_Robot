@@ -18,6 +18,22 @@ robot:
     #   "5": 2.3869
     urdf_path: $(find lerobot_description)/urdf/so101.urdf.xacro
 
+  # Unified joint definitions
+  joints:
+    arm:
+      - "1"
+      - "2"
+      - "3"
+      - "4"
+      - "5"
+
+  # MoveIt configuration
+  moveit:
+    arm_group_name: arm
+    base_link: base
+    ee_link: gripper
+    shoulder_link: shoulder
+
   peripherals:
     - type: camera
       name: test

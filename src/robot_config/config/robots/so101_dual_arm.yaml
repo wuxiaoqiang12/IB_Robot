@@ -16,6 +16,28 @@ robot:
     calib_file: $(env HOME)/.calibrate/so101_dual_calibrate.json
     urdf_path: $(find robot_description)/urdf/lerobot/so101/so101_dual.urdf.xacro
 
+  # Unified joint definitions
+  joints:
+    left_arm:
+      - "left_1"
+      - "left_2"
+      - "left_3"
+      - "left_4"
+      - "left_5"
+    right_arm:
+      - "right_1"
+      - "right_2"
+      - "right_3"
+      - "right_4"
+      - "right_5"
+
+  # MoveIt configuration (for left arm as primary)
+  moveit:
+    arm_group_name: left_arm
+    base_link: base
+    ee_link: left_gripper
+    shoulder_link: left_shoulder
+
   # Peripheral devices (cameras, microphones, etc.)
   peripherals:
     # Top-down view camera
