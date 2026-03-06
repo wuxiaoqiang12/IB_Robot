@@ -78,9 +78,24 @@ def generate_launch_description():
         condition=IfCondition(display)  # 4. 只有 "display" 为 True 时才启动
     )
 
+    moveit_gateway_node = Node(
+        package="robot_moveit",
+        executable="moveit_gateway.py",
+        name="moveit_gateway",
+        output="screen",
+        parameters=[
+            {"arm_group_name": "arm"},
+            {"base_link": "base"},
+            {"ee_link": "gripper"},
+            {"joint_names": ["1", "2", "3", "4", "5"]},
+            {"use_sim_time": is_sim},
+        ],
+    )
+
     return LaunchDescription([
         is_sim_arg,
-        display_arg,  # <-- 将 display_arg 添加到返回列表
+        display_arg,
         move_group_node,
-        rviz_node
+        rviz_node,
+        moveit_gateway_node
     ])
