@@ -3,8 +3,8 @@ from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
-from launch.substitutions import Command, LaunchConfiguration
-from launch.conditions import IfCondition  # <-- 1. 导入 IfCondition
+from launch.conditions import IfCondition
+from launch.substitutions import LaunchConfiguration, PythonExpression
 
 from launch_ros.actions import Node
 from moveit_configs_utils import MoveItConfigsBuilder
@@ -22,15 +22,41 @@ def generate_launch_description():
         description="Launch RViz for visualization if True"
     )
 
+    # 3. 声明 "joint_names" 启动参数（从 robot_config 传入）
+    joint_names_arg = DeclareLaunchArgument(
+        name="joint_names",
+        description="Joint names for the arm group (space-separated, required)"
+    )
+
+    # 4. 声明 MoveIt gateway 参数（从 robot_config 传入）
+    arm_group_name_arg = DeclareLaunchArgument(
+        name="arm_group_name",
+        description="MoveIt planning group name (required)"
+    )
+    base_link_arg = DeclareLaunchArgument(
+        name="base_link",
+        description="Base link frame id (required)"
+    )
+    ee_link_arg = DeclareLaunchArgument(
+        name="ee_link",
+        description="End effector link frame id (required)"
+    )
+    shoulder_link_arg = DeclareLaunchArgument(
+        name="shoulder_link",
+        description="Shoulder link frame id (required)"
+    )
+
     # get the argument value at runtime
     is_sim = LaunchConfiguration("is_sim")
-    display = LaunchConfiguration("display")  # 3. 获取 "display" 的值
+    display = LaunchConfiguration("display")
+    arm_group_name = LaunchConfiguration("arm_group_name")
+    base_link = LaunchConfiguration("base_link")
+    ee_link = LaunchConfiguration("ee_link")
+    shoulder_link = LaunchConfiguration("shoulder_link")
 
     # URDF
     robot_description_dir = get_package_share_directory("robot_description")
     so101_urdf_path = os.path.join(robot_description_dir, "urdf", "lerobot", "so101", "so101.urdf.xacro")
-
-    
 
     moveit_config = (
             MoveItConfigsBuilder("so101", package_name="robot_moveit")
@@ -71,16 +97,37 @@ def generate_launch_description():
         name="rviz2",
         output="screen",
         arguments=["-d", rviz_config_path],
-        parameters=[moveit_config.robot_description, 
+        parameters=[moveit_config.robot_description,
                     moveit_config.robot_description_semantic,
                     moveit_config.robot_description_kinematics,
                     moveit_config.joint_limits],
-        condition=IfCondition(display)  # 4. 只有 "display" 为 True 时才启动
+        condition=IfCondition(display)
+    )
+
+    moveit_gateway_node = Node(
+        package="robot_moveit",
+        executable="moveit_gateway.py",
+        name="moveit_gateway",
+        output="screen",
+        parameters=[
+            {"arm_group_name": arm_group_name},
+            {"base_link": base_link},
+            {"ee_link": ee_link},
+            {"shoulder_link": shoulder_link},
+            {"joint_names": PythonExpression(["'", LaunchConfiguration("joint_names"), "'.split()"])},
+            {"use_sim_time": is_sim},
+        ],
     )
 
     return LaunchDescription([
         is_sim_arg,
-        display_arg,  # <-- 将 display_arg 添加到返回列表
+        display_arg,
+        joint_names_arg,
+        arm_group_name_arg,
+        base_link_arg,
+        ee_link_arg,
+        shoulder_link_arg,
         move_group_node,
-        rviz_node
+        rviz_node,
+        moveit_gateway_node
     ])

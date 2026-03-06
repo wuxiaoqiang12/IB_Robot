@@ -33,6 +33,15 @@ robot:
       - "6"
     all: ["1", "2", "3", "4", "5", "6"]
 
+  # ============================================
+  # MoveIt configuration
+  # ============================================
+  moveit:
+    arm_group_name: arm
+    base_link: base
+    ee_link: gripper
+    shoulder_link: shoulder
+
   # Control mode management
   default_control_mode: "teleop_act"
 
@@ -83,7 +92,7 @@ robot:
   # ros2_control configuration
   ros2_control:
     hardware_plugin: so101_hardware/SO101SystemHardware
-    port: /dev/ttyACM1
+    port: /dev/ttyACM0
     calib_file: $(env HOME)/.calibrate/so101_follower_calibrate.json
     joint_names: ["1", "2", "3", "4", "5", "6"]
     # Reset positions (optional)
