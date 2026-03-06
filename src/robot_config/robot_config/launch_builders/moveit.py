@@ -43,16 +43,22 @@ def generate_moveit_nodes(robot_config, control_mode, use_sim=False, display=Tru
         moveit_launch_file = Path(moveit_package_dir) / 'launch' / 'so101_moveit.launch.py'
 
         if moveit_launch_file.exists():
+            # Get joint_names from robot_config to pass to MoveIt launch
+            joint_names = robot_config.get('joints', {}).get('arm', ['1', '2', '3', '4', '5'])
+            # Convert list to space-separated string for launch argument
+            joint_names_str = ' '.join(joint_names)
+
             # Include MoveIt launch file
             moveit_launch = IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(str(moveit_launch_file)),
                 launch_arguments={
                     'is_sim': 'True' if use_sim else 'False',
                     'display': 'True' if display else 'False',
+                    'joint_names': joint_names_str,
                 }.items()
             )
             actions.append(moveit_launch)
-            print(f"[robot_config] Added MoveIt launch (is_sim={use_sim}, display={display})")
+            print(f"[robot_config] Added MoveIt launch (is_sim={use_sim}, display={display}, joint_names={joint_names_str})")
         else:
             print(f"[robot_config] WARNING: MoveIt launch file not found at {moveit_launch_file}")
     except Exception as e:

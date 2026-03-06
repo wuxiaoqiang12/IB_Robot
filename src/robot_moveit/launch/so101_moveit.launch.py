@@ -3,8 +3,8 @@ from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
-from launch.substitutions import Command, LaunchConfiguration
-from launch.conditions import IfCondition  # <-- 1. 导入 IfCondition
+from launch.conditions import IfCondition
+from launch.substitutions import LaunchConfiguration, PythonExpression
 
 from launch_ros.actions import Node
 from moveit_configs_utils import MoveItConfigsBuilder
@@ -22,15 +22,20 @@ def generate_launch_description():
         description="Launch RViz for visualization if True"
     )
 
+    # 3. 声明 "joint_names" 启动参数（从 robot_config 传入）
+    joint_names_arg = DeclareLaunchArgument(
+        name="joint_names",
+        default_value="1 2 3 4 5",
+        description="Joint names for the arm group (space-separated)"
+    )
+
     # get the argument value at runtime
     is_sim = LaunchConfiguration("is_sim")
-    display = LaunchConfiguration("display")  # 3. 获取 "display" 的值
+    display = LaunchConfiguration("display")
 
     # URDF
     robot_description_dir = get_package_share_directory("robot_description")
     so101_urdf_path = os.path.join(robot_description_dir, "urdf", "lerobot", "so101", "so101.urdf.xacro")
-
-    
 
     moveit_config = (
             MoveItConfigsBuilder("so101", package_name="robot_moveit")
@@ -71,16 +76,32 @@ def generate_launch_description():
         name="rviz2",
         output="screen",
         arguments=["-d", rviz_config_path],
-        parameters=[moveit_config.robot_description, 
+        parameters=[moveit_config.robot_description,
                     moveit_config.robot_description_semantic,
                     moveit_config.robot_description_kinematics,
                     moveit_config.joint_limits],
-        condition=IfCondition(display)  # 4. 只有 "display" 为 True 时才启动
+        condition=IfCondition(display)
+    )
+
+    moveit_gateway_node = Node(
+        package="robot_moveit",
+        executable="moveit_gateway.py",
+        name="moveit_gateway",
+        output="screen",
+        parameters=[
+            {"arm_group_name": "arm"},
+            {"base_link": "base"},
+            {"ee_link": "gripper"},
+            {"joint_names": PythonExpression(["'", LaunchConfiguration("joint_names"), "'.split()"])},
+            {"use_sim_time": is_sim},
+        ],
     )
 
     return LaunchDescription([
         is_sim_arg,
-        display_arg,  # <-- 将 display_arg 添加到返回列表
+        display_arg,
+        joint_names_arg,
         move_group_node,
-        rviz_node
+        rviz_node,
+        moveit_gateway_node
     ])
