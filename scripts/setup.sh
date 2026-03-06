@@ -38,14 +38,14 @@ check_conda() {
 update_submodules() {
     echo ""
     echo -e "${YELLOW}--- Git Submodule Management ---${NC}"
-    
+
     local submodules_exist=false
-    if [[ -d "libs/lerobot/.git" ]]; then
+    if [[ -d "libs/lerobot/.git" ]] || [[ -d "src/pymoveit2/.git" ]]; then
         submodules_exist=true
     fi
 
     if [[ "${submodules_exist}" == "true" ]]; then
-        log_info "Submodules (libs/lerobot) are already initialized."
+        log_info "Submodules (libs/lerobot, src/pymoveit2) are already initialized."
         read -p "Do you want to sync/update submodules? [y/N]: " CONFIRM
         if [[ "${CONFIRM}" != "y" && "${CONFIRM}" != "Y" ]]; then
             log_info "Skipping submodule update."
@@ -53,7 +53,7 @@ update_submodules() {
         fi
     else
         log_warn "Submodules not found or incomplete."
-        read -p "Initialize and clone submodules (libs/lerobot)? [Y/n]: " CONFIRM
+        read -p "Initialize and clone submodules (libs/lerobot, src/pymoveit2)? [Y/n]: " CONFIRM
         if [[ "${CONFIRM}" == "n" || "${CONFIRM}" == "N" ]]; then
             log_error "Submodule initialization skipped."
             return 0

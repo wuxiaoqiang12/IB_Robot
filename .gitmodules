@@ -3,4 +3,8 @@
     url = git@gitcode.com:openeuler/lerobot_ros2.git
     branch = master
     ignore = dirty
+[submodule "src/pymoveit2"]
+	path = src/pymoveit2
+	url = https://github.com/AndrejOrsula/pymoveit2.git
+    branch = main
     ignore = dirty
