@@ -38,31 +38,100 @@ check_conda() {
 update_submodules() {
     echo ""
     echo -e "${YELLOW}--- Git Submodule Management ---${NC}"
-    
-    local submodules_exist=false
-    if [[ -d "libs/lerobot/.git" ]]; then
-        submodules_exist=true
-    fi
 
-    if [[ "${submodules_exist}" == "true" ]]; then
-        log_info "Submodules (libs/lerobot) are already initialized."
-        read -p "Do you want to sync/update submodules? [y/N]: " CONFIRM
+    # Define submodules
+    local submodules=(
+        "libs/lerobot:LeRobot"
+        "src/pymoveit2:PyMoveIt2"
+    )
+
+    # Check which submodules need initialization
+    local need_init=()
+    for entry in "${submodules[@]}"; do
+        local path="${entry%%:*}"
+        local name="${entry##*:}"
+        if [[ ! -d "${path}/.git" ]]; then
+            need_init+=("${path}:${name}")
+        fi
+    done
+
+    # If all submodules exist, ask if user wants to update
+    if [[ ${#need_init} -eq 0 ]]; then
+        log_info "All submodules are already initialized:"
+        for entry in "${submodules[@]}"; do
+            local path="${entry%%:*}"
+            local name="${entry##*:}"
+            echo "  ✓ ${name} (${path})"
+        done
+        echo ""
+        read -p "Do you want to sync/update all submodules? [y/N]: " CONFIRM
         if [[ "${CONFIRM}" != "y" && "${CONFIRM}" != "Y" ]]; then
             log_info "Skipping submodule update."
             return 0
         fi
-    else
-        log_warn "Submodules not found or incomplete."
-        read -p "Initialize and clone submodules (libs/lerobot)? [Y/n]: " CONFIRM
-        if [[ "${CONFIRM}" == "n" || "${CONFIRM}" == "N" ]]; then
-            log_error "Submodule initialization skipped."
-            return 0
-        fi
+        log_info "Updating all submodules..."
+        export GIT_LFS_SKIP_SMUDGE=1
+        git submodule update --init --recursive
+        return 0
     fi
 
-    log_info "Updating git submodules (skipping LFS)..."
-    export GIT_LFS_SKIP_SMUDGE=1
-    git submodule update --init --recursive
+    # Some submodules need initialization
+    log_warn "The following submodules are not initialized:"
+    for entry in "${need_init[@]}"; do
+        local path="${entry%%:*}"
+        local name="${entry##*:}"
+        echo "  ✗ ${name} (${path})"
+    done
+    echo ""
+
+    # Ask which submodules to initialize
+    log_info "Select which submodules to initialize:"
+    echo "  1) All submodules"
+    echo "  2) LeRobot only (libs/lerobot)"
+    echo "  3) PyMoveIt2 only (src/pymoveit2)"
+    echo "  4) Select individually"
+    echo "  0) Skip"
+    echo ""
+    read -p "Enter your choice [1-4, 0]: " CHOICE
+
+    case "${CHOICE}" in
+        1)
+            log_info "Initializing all submodules..."
+            export GIT_LFS_SKIP_SMUDGE=1
+            git submodule update --init --recursive
+            ;;
+        2)
+            log_info "Initializing LeRobot (libs/lerobot)..."
+            export GIT_LFS_SKIP_SMUDGE=1
+            git submodule update --init --recursive libs/lerobot
+            ;;
+        3)
+            log_info "Initializing PyMoveIt2 (src/pymoveit2)..."
+            export GIT_LFS_SKIP_SMUDGE=1
+            git submodule update --init --recursive src/pymoveit2
+            ;;
+        4)
+            echo ""
+            for entry in "${need_init[@]}"; do
+                local path="${entry%%:*}"
+                local name="${entry##*:}"
+                read -p "Initialize ${name} (${path})? [Y/n]: " CONFIRM
+                if [[ "${CONFIRM}" != "n" && "${CONFIRM}" != "N" ]]; then
+                    log_info "Initializing ${name}..."
+                    export GIT_LFS_SKIP_SMUDGE=1
+                    git submodule update --init --recursive "${path}"
+                else
+                    log_warn "Skipped ${name}"
+                fi
+            done
+            ;;
+        0)
+            log_warn "Submodule initialization skipped."
+            ;;
+        *)
+            log_error "Invalid choice. Skipping submodule initialization."
+            ;;
+    esac
 }
 
 setup_developer_forks() {
@@ -187,6 +256,16 @@ setup_python_venv() {
     # 安装原有的硬件依赖
     log_info "Installing hardware dependencies (pyserial, feetech)..."
     python3 -m pip install pyserial feetech-servo-sdk --quiet
+
+    # 安装 scipy 用于数学计算 (四元数/旋转矩阵转换)
+    log_info "Installing scipy for mathematical computations..."
+    python3 -m pip install scipy --quiet
+
+    # 安装 gitlint 并设置 git hook
+    log_info "Installing gitlint..."
+    python3 -m pip install gitlint --quiet
+    log_info "Installing gitlint pre-commit hook..."
+    gitlint install-hook
 
     # 4. 环境验证
     log_info "Verifying ROS 2 connection..."
