@@ -91,7 +91,49 @@ robot_config 包支持双控制模式，以满足不同 AI 模型的需求：
 
 ### 可用控制模式
 
-#### 1. teleop_act 模式（高频位置控制）
+#### 1. teleop 模式（人工遥操作）
+
+**适用于：** 人工遥操作设备（leader arm、游戏手柄、VR设备）
+
+**特点：**
+- 实时直接控制
+- 零延迟直通（< 5ms）
+- 支持多种输入设备
+- 内置安全过滤（关节限位）
+
+**配置：**
+```yaml
+robot:
+  default_control_mode: "teleop"
+
+  control_modes:
+    teleop:
+      description: "人工遥操作模式（直接控制）"
+      controllers:
+        - joint_state_broadcaster
+        - arm_position_controller
+        - gripper_position_controller
+      inference:
+        enabled: false
+        force_disable: true
+
+  teleoperation:
+    enabled: true
+    active_device: "so101_leader"
+    devices:
+      - name: "so101_leader"
+        type: "leader_arm"
+        port: "/dev/ttyUSB0"
+        calib_file: "$(env HOME)/.calibrate/so101_leader_calibrate.json"
+```
+
+**启动命令：**
+```bash
+# 遥操作模式（带自动录制）
+ros2 launch robot_config robot.launch.py robot_config:=so101_single_arm control_mode:=teleop record:=true
+```
+
+#### 2. model_inference 模式（高频位置控制）
 
 **适用于：** 端到端模仿学习模型（ACT、pi0、Diffusion Policy）
 
@@ -104,15 +146,18 @@ robot_config 包支持双控制模式，以满足不同 AI 模型的需求：
 **配置：**
 ```yaml
 robot:
-  default_control_mode: "teleop_act"
+  default_control_mode: "model_inference"
 
   control_modes:
-    teleop_act:
-      description: "高频端到端控制模式"
+    model_inference:
+      description: "高频端到端控制模式（ACT/pi0）"
       controllers:
         - joint_state_broadcaster
         - arm_position_controller
         - gripper_position_controller
+      inference:
+        enabled: true
+        model: so101_act
 ```
 
 **启动的控制器：**
@@ -165,12 +210,45 @@ ros2 action send_goal /arm_trajectory_controller/follow_joint_trajectory control
 robot:
   name: so101_single_arm
   type: so101
-  default_control_mode: "teleop_act"  # 或 "moveit_planning"
+  default_control_mode: "model_inference"  # 或 "teleop" 或 "moveit_planning"
 
   joints:
     arm: ["1", "2", "3", "4", "5"]
     gripper: ["6"]
     all: ["1", "2", "3", "4", "5", "6"]
+
+  # 控制模式配置
+  control_modes:
+    teleop:
+      description: "人工遥操作模式"
+      controllers:
+        - joint_state_broadcaster
+        - arm_position_controller
+        - gripper_position_controller
+
+    model_inference:
+      description: "高频端到端控制模式"
+      controllers:
+        - joint_state_broadcaster
+        - arm_position_controller
+        - gripper_position_controller
+
+    moveit_planning:
+      description: "MoveIt轨迹规划模式"
+      controllers:
+        - joint_state_broadcaster
+        - arm_trajectory_controller
+        - gripper_trajectory_controller
+
+  # 遥操作配置
+  teleoperation:
+    enabled: true
+    active_device: "so101_leader"
+    devices:
+      - name: "so101_leader"
+        type: "leader_arm"
+        port: "/dev/ttyUSB0"
+        calib_file: "$(env HOME)/.calibrate/so101_leader_calibrate.json"
 
   # 硬件配置
   ros2_control:
@@ -253,8 +331,9 @@ control_modes:
 **问题：** 推理服务发送位置命令但启动了轨迹控制器
 
 **解决方案：** 确保控制模式与模型类型匹配：
-- ACT/pi0 模型 → `teleop_act` 模式
+- ACT/pi0 模型 → `model_inference` 模式
 - VoxPoser/VLM 模型 → `moveit_planning` 模式
+- 人工遥操作 → `teleop` 模式
 
 ## 使用方法
 

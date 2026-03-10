@@ -137,7 +137,7 @@ def generate_ros2_control_nodes(robot_config, use_sim, auto_start_controllers='t
     ))
 
     # Get control mode configuration
-    control_mode_name = robot_config.get("default_control_mode", "teleop_act")
+    control_mode_name = robot_config.get("default_control_mode", "model_inference")
     control_modes = robot_config.get("control_modes", {})
 
     if control_modes:

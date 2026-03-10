@@ -91,7 +91,49 @@ The robot_config package supports dual control modes for different AI model requ
 
 ### Available Control Modes
 
-#### 1. teleop_act Mode (High-Frequency Position Control)
+#### 1. teleop Mode (Human Teleoperation)
+
+**Use for:** Human teleoperation devices (leader arm, gamepad, VR device)
+
+**Characteristics:**
+- Real-time direct control
+- Zero-latency passthrough (< 5ms)
+- Multiple input device support
+- Built-in safety filters (joint limits)
+
+**Configuration:**
+```yaml
+robot:
+  default_control_mode: "teleop"
+
+  control_modes:
+    teleop:
+      description: "Human teleoperation mode (direct control)"
+      controllers:
+        - joint_state_broadcaster
+        - arm_position_controller
+        - gripper_position_controller
+      inference:
+        enabled: false
+        force_disable: true
+
+  teleoperation:
+    enabled: true
+    active_device: "so101_leader"
+    devices:
+      - name: "so101_leader"
+        type: "leader_arm"
+        port: "/dev/ttyUSB0"
+        calib_file: "$(env HOME)/.calibrate/so101_leader_calibrate.json"
+```
+
+**Launch command:**
+```bash
+# Teleop mode (with auto recording)
+ros2 launch robot_config robot.launch.py robot_config:=so101_single_arm control_mode:=teleop record:=true
+```
+
+#### 2. model_inference Mode (High-Frequency Position Control)
 
 **Use for:** End-to-end imitation learning models (ACT, pi0, Diffusion Policy)
 
@@ -104,15 +146,18 @@ The robot_config package supports dual control modes for different AI model requ
 **Configuration:**
 ```yaml
 robot:
-  default_control_mode: "teleop_act"
+  default_control_mode: "model_inference"
 
   control_modes:
-    teleop_act:
-      description: "High-frequency end-to-end control mode"
+    model_inference:
+      description: "High-frequency end-to-end control mode (ACT/pi0)"
       controllers:
         - joint_state_broadcaster
         - arm_position_controller
         - gripper_position_controller
+      inference:
+        enabled: true
+        model: so101_act
 ```
 
 **Launched controllers:**
@@ -173,8 +218,11 @@ Control mode can be overridden via command line:
 # Use default mode from config file
 ros2 launch robot_config robot.launch.py robot_config:=so101_single_arm
 
-# Override to teleop_act mode
-ros2 launch robot_config robot.launch.py robot_config:=so101_single_arm control_mode:=teleop_act
+# Override to teleop mode
+ros2 launch robot_config robot.launch.py robot_config:=so101_single_arm control_mode:=teleop
+
+# Override to model_inference mode
+ros2 launch robot_config robot.launch.py robot_config:=so101_single_arm control_mode:=model_inference
 
 # Override to moveit_planning mode
 ros2 launch robot_config robot.launch.py robot_config:=so101_single_arm control_mode:=moveit_planning
@@ -185,8 +233,14 @@ ros2 launch robot_config robot.launch.py robot_config:=so101_single_arm control_
 ```
 What type of model are you using?
 │
+├─ Human teleoperation (leader arm, gamepad, VR)
+│  └─ Use teleop mode
+│     ├─ Real-time direct control
+│     ├─ Zero-latency passthrough (< 5ms)
+│     └─ Built-in safety filters
+│
 ├─ End-to-end imitation learning (ACT, pi0, Diffusion)
-│  └─ Use teleop_act mode
+│  └─ Use model_inference mode
 │     ├─ Model outputs high-frequency position streams (50-100Hz)
 │     ├─ Needs minimal latency (< 5ms)
 │     └─ No trajectory planning required
@@ -208,15 +262,28 @@ robot:
   robot_type: so_101
 
   # Control mode management
-  default_control_mode: "teleop_act"  # Can be overridden via command line
+  default_control_mode: "model_inference"  # Can be overridden via command line
 
   control_modes:
-    teleop_act:
+    teleop:
+      description: "Human teleoperation mode (direct control)"
+      controllers:
+        - joint_state_broadcaster
+        - arm_position_controller
+        - gripper_position_controller
+      inference:
+        enabled: false
+        force_disable: true
+
+    model_inference:
       description: "High-frequency end-to-end control mode (ACT/pi0)"
       controllers:
         - joint_state_broadcaster
         - arm_position_controller
         - gripper_position_controller
+      inference:
+        enabled: true
+        model: so101_act
 
     moveit_planning:
       description: "MoveIt trajectory planning mode (VoxPoser/VLM)"
@@ -239,6 +306,16 @@ robot:
     reset_positions:
       "1": 0.0813
       "2": 3.7905
+
+  # Teleoperation configuration
+  teleoperation:
+    enabled: true
+    active_device: "so101_leader"
+    devices:
+      - name: "so101_leader"
+        type: "leader_arm"
+        port: "/dev/ttyUSB0"
+        calib_file: "$(env HOME)/.calibrate/so101_leader_calibrate.json"
 
   # Peripherals (cameras, sensors)
   peripherals:
