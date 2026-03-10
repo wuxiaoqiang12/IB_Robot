@@ -208,7 +208,8 @@ robot:
 
     observations:
       - key: observation.images.front
-        topic: /camera/front
+        topic: /camera/front/image_raw
+        type: sensor_msgs/msg/Image
         peripheral: front
         image:
           resize: [480, 640]
@@ -222,7 +223,8 @@ robot:
           depth: 10
 
       - key: observation.images.top
-        topic: /camera/top
+        topic: /camera/top/image_raw
+        type: sensor_msgs/msg/Image
         peripheral: top  # References camera 'top' from peripherals above
         image:
           resize: [480, 640]  # height, width for LeRobot
@@ -236,7 +238,8 @@ robot:
           depth: 10
 
       - key: observation.images.wrist
-        topic: /camera/wrist
+        topic: /camera/wrist/image_raw
+        type: sensor_msgs/msg/Image
         peripheral: wrist  # References camera 'wrist' from peripherals above
         image:
           resize: [480, 640]
@@ -251,7 +254,8 @@ robot:
 
       - key: observation.state
         topic: /joint_states
-        selector: { names: ["1", "2", "3", "4", "5", "6"] }
+        type: sensor_msgs/msg/JointState
+        selector: { names: ["position.1", "position.2", "position.3", "position.4", "position.5", "position.6"] }
         align:
           strategy: hold
           stamp: header
@@ -265,12 +269,12 @@ robot:
       - key: action
         selector:
           names:
-            - position.follower_arm:shoulder_pan
-            - position.follower_arm:shoulder_lift
-            - position.follower_arm:elbow_flex
-            - position.follower_arm:wrist_flex
-            - position.follower_arm:wrist_roll
-            - position.follower_arm:gripper
+            - "action.0"
+            - "action.1"
+            - "action.2"
+            - "action.3"
+            - "action.4"
+            - "action.5"
         publish:
           topic: /arm_position_controller/commands
           type: std_msgs/msg/Float64MultiArray
@@ -304,5 +308,9 @@ robot:
         "5": {"min": -2.9115, "max": 2.9115}
         "6": {"min": 0.0, "max": 1.0}  # Gripper
 
-    recording:
-      storage: mcap
+  # ============================================
+  # Recording Configuration
+  # ============================================
+  recording:
+    bag_base_dir: "~/rosbag/episodes"
+    storage: mcap
