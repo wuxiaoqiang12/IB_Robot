@@ -207,3 +207,16 @@ def validate_joint_config(robot_config):
     print("[robot_config] =========================================================")
 
     return validation_passed
+
+
+def prepare_lerobot_env():
+    """Prepare environment with lerobot PYTHONPATH."""
+    env = os.environ.copy()
+    workspace_path = os.environ.get("WORKSPACE", os.getcwd())
+    lerobot_src = os.path.join(workspace_path, "libs/lerobot/src")
+
+    if os.path.exists(lerobot_src):
+        current_pp = env.get("PYTHONPATH", "")
+        env["PYTHONPATH"] = f"{lerobot_src}:{current_pp}" if current_pp else lerobot_src
+
+    return env

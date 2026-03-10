@@ -17,31 +17,9 @@ from robot_config.config import (
     ContractAction,
 )
 
+from .utils import resolve_ros_path
+
 logger = get_logger("robot_config.loader")
-
-
-def _resolve_path(path: str, config_dir: Optional[Path] = None) -> str:
-    """Resolve environment variables and package aliases in path.
-
-    Supports:
-    - $(env VAR) -> environment variable
-    - $(find package_name) -> package share directory
-    """
-    if path is None:
-        return path
-
-    # Resolve environment variables
-    if "$(env " in path:
-        var_name = path.split("$(env ", 1)[1].split(")")[0]
-        env_value = os.environ.get(var_name, "")
-        path = path.replace(f"$(env {var_name})", env_value)
-
-    # Resolve package paths (requires ament resources)
-    if config_dir and "$(find " in path:
-        # For now, keep it as-is, will be resolved by ROS2 launch system
-        pass
-
-    return path
 
 
 def load_camera_config(data: Dict[str, Any]) -> CameraConfig:
@@ -103,13 +81,13 @@ def load_ros2_control_config(data: Dict[str, Any], config_dir: Optional[Path] = 
         if key not in ["hardware_plugin", "urdf_path"]:
             # Resolve paths in parameters
             if isinstance(value, str):
-                value = _resolve_path(value, config_dir)
+                    value = resolve_ros_path(value)
             params[key] = value
 
     return Ros2ControlConfig(
         hardware_plugin=data.get("hardware_plugin", ""),
         params=params,
-        urdf_path=_resolve_path(data.get("urdf_path"), config_dir),
+        urdf_path=resolve_ros_path(data.get("urdf_path")),
     )
 
 

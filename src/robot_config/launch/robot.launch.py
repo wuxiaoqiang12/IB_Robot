@@ -22,8 +22,11 @@ Usage:
     # Basic simulation
     ros2 launch robot_config robot.launch.py robot_config:=so101_single_arm use_sim:=true
 
-    # ACT inference mode (auto-detected)
-    ros2 launch robot_config robot.launch.py robot_config:=so101_single_arm use_sim:=true control_mode:=teleop_act
+    # Model inference mode (auto-detected)
+    ros2 launch robot_config robot.launch.py robot_config:=so101_single_arm use_sim:=true control_mode:=model_inference
+
+    # Teleop mode (human teleoperation)
+    ros2 launch robot_config robot.launch.py robot_config:=so101_single_arm control_mode:=teleop record:=true
 
     # MoveIt planning mode (auto-detected, with RViz)
     ros2 launch robot_config robot.launch.py robot_config:=so101_single_arm control_mode:=moveit_planning use_sim:=true
@@ -35,7 +38,7 @@ Usage:
     ros2 launch robot_config robot.launch.py robot_config:=so101_single_arm use_sim:=false
 
     # Override auto-detection
-    ros2 launch robot_config robot.launch.py control_mode:=teleop_act with_inference:=true use_sim:=true
+    ros2 launch robot_config robot.launch.py control_mode:=model_inference with_inference:=true use_sim:=true
 
 **Cleanup**: If you encounter "Controller already loaded" errors, run:
 ```bash
@@ -47,10 +50,11 @@ Launch Arguments:
     config_path: Optional full path to robot config file
     use_sim: Use simulation mode (default: false)
     auto_start_controllers: Automatically spawn controllers (default: true, set to false for debugging)
-    control_mode: Override control mode from YAML (teleop_act or moveit_planning). If empty, uses default_control_mode from config file
+    control_mode: Override control mode from YAML (teleop, model_inference, or moveit_planning). If empty, uses default_control_mode from config file
     with_inference: Enable inference pipeline. If empty, auto-detects from control mode config
     with_moveit: Enable MoveIt motion planning. If empty, auto-detects from control mode name
     moveit_display: Launch RViz for MoveIt visualization (default: true, only used if MoveIt is enabled)
+    record: Enable automatic rosbag recording (default: false, auto-discovers topics from config)
 """
 
 import yaml
@@ -72,6 +76,7 @@ from robot_config.launch_builders.control import generate_ros2_control_nodes
 from robot_config.launch_builders.perception import generate_camera_nodes, generate_tf_nodes
 from robot_config.launch_builders.simulation import generate_gazebo_nodes
 from robot_config.launch_builders.execution import generate_execution_nodes
+from robot_config.launch_builders.teleop import generate_teleop_nodes
 
 
 def load_robot_config(robot_config_name, config_path_override=None):
@@ -155,11 +160,25 @@ def launch_setup(context, *args, **kwargs):
 
     # ========== 3. Apply control mode override ==========
     if control_mode_override:
-        original_mode = robot_config.get('default_control_mode', 'unknown')
         robot_config['default_control_mode'] = control_mode_override
-        print(f"[robot_config] Control mode override: {original_mode} -> {control_mode_override}")
+    
+    active_control_mode = robot_config.get('default_control_mode', 'model_inference')
+    print(f"[robot_config] Active control mode: {active_control_mode}")
+
+    # Determine with_inference flag globally
+    with_inference_str = context.launch_configurations.get('with_inference', '')
+    if with_inference_str != '':
+        with_inference = parse_bool(with_inference_str, default=False)
     else:
-        print(f"[robot_config] Using default control mode: {robot_config.get('default_control_mode', 'teleop_act')}")
+        control_mode_config = robot_config.get('control_modes', {}).get(active_control_mode, {})
+        with_inference = control_mode_config.get('inference', {}).get('enabled', False)
+
+    # Force disable inference in teleop mode if not explicitly overridden
+    if active_control_mode == 'teleop' and with_inference_str == '':
+        with_inference = False
+        print("[robot_config] Teleop mode: forcing with_inference=False")
+
+    print(f"[robot_config] Final with_inference={with_inference}")
 
     # ========== 4. Generate Control System Nodes ==========
     print(f"[robot_config] ========== Generating Control Nodes ==========")
@@ -205,24 +224,31 @@ def launch_setup(context, *args, **kwargs):
         print(f"[robot_config] ERROR generating perception nodes: {e}")
         raise
 
-    # ========== 7. Generate Execution Nodes ==========
+    # ========== 7. Generate Teleop Nodes (if in teleop mode) ==========
+    print(f"[robot_config] ========== Checking Teleop Mode ==========")
+    try:
+        # Check if teleop mode is enabled
+        if active_control_mode == 'teleop':
+            print(f"[robot_config] TELEOP MODE DETECTED")
+
+            # Check if teleoperation is configured
+            teleop_config = robot_config.get('teleoperation', {})
+            if not teleop_config.get('enabled', False):
+                print(f"[robot_config] WARNING: Teleop mode requested but teleoperation config not found")
+            else:
+                # Generate teleop nodes
+                teleop_nodes = generate_teleop_nodes(robot_config)
+                actions.extend(teleop_nodes)
+                print(f"[robot_config] Added {len(teleop_nodes)} teleop nodes")
+        else:
+            print(f"[robot_config] Skipping teleop nodes (mode is {active_control_mode})")
+    except Exception as e:
+        print(f"[robot_config] ERROR checking teleop mode: {e}")
+        raise
+
+    # ========== 8. Generate Execution Nodes ==========
     print(f"[robot_config] ========== Generating Execution Nodes ==========")
     try:
-        # Get the active control mode
-        active_control_mode = robot_config.get('default_control_mode', 'teleop_act')
-
-        # Determine with_inference flag
-        # Priority: explicit parameter > control mode config > default (false)
-        with_inference_str = context.launch_configurations.get('with_inference', '')
-        
-        if with_inference_str != '':
-            with_inference = parse_bool(with_inference_str, default=False)
-        else:
-            control_mode_config = robot_config.get('control_modes', {}).get(active_control_mode, {})
-            with_inference = control_mode_config.get('inference', {}).get('enabled', False)
-        
-        print(f"[robot_config] with_inference={with_inference}")
-
         if with_inference:
             execution_nodes = generate_execution_nodes(robot_config, active_control_mode, use_sim)
             actions.extend(execution_nodes)
@@ -233,7 +259,7 @@ def launch_setup(context, *args, **kwargs):
         print(f"[robot_config] ERROR generating execution nodes: {e}")
         raise
 
-    # ========== 8. Generate MoveIt Nodes ==========
+    # ========== 9. Generate MoveIt Nodes ==========
     try:
         # Determine with_moveit flag
         with_moveit_str = context.launch_configurations.get('with_moveit', '')
@@ -271,6 +297,61 @@ def launch_setup(context, *args, **kwargs):
         print(f"[robot_config] ERROR generating MoveIt nodes: {e}")
         print(f"[robot_config] Continuing without MoveIt...")
 
+    # ========== 9. Automatic Recording (if record:=true) ==========
+    try:
+        record_str = context.launch_configurations.get('record', 'false')
+        record_enabled = parse_bool(record_str, default=False)
+
+        if record_enabled:
+            from launch.actions import ExecuteProcess
+            from datetime import datetime
+
+            print(f"[robot_config] ========== Setting up Automatic Recording ==========")
+
+            # Auto-discover topics to record
+            topics = ['/joint_states']
+
+            # Add controller command topics
+            topics.append('/arm_position_controller/commands')
+            topics.append('/gripper_position_controller/commands')
+
+            # Add diagnostics
+            topics.append('/diagnostics')
+
+            # Add camera topics from peripherals
+            peripherals = robot_config.get('peripherals', [])
+            for peripheral in peripherals:
+                if peripheral.get('type') == 'camera':
+                    name = peripheral.get('name', 'camera')
+                    # Add common camera topics
+                    topics.append(f'/camera/{name}/image_raw')
+                    topics.append(f'/camera/{name}/camera_info')
+
+            # Generate filename with timestamp
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            robot_name = robot_config.get('name', 'robot')
+            output_file = f"~/rosbag/{robot_name}_{timestamp}.mcap"
+
+            # Expand ~ to actual home directory
+            output_file = str(Path(output_file).expanduser())
+
+            print(f"[robot_config] Recording {len(topics)} topics to: {output_file}")
+            print(f"[robot_config] Topics: {topics}")
+
+            # Create recording action
+            recording_action = ExecuteProcess(
+                cmd=['ros2', 'bag', 'record', '-o', output_file] + topics,
+                output='screen'
+            )
+
+            actions.append(recording_action)
+            print(f"[robot_config] ✓ Recording action added")
+        else:
+            print(f"[robot_config] Recording disabled (record:={record_str})")
+    except Exception as e:
+        print(f"[robot_config] ERROR setting up recording: {e}")
+        print(f"[robot_config] Continuing without recording...")
+
     print(f"[robot_config] ========== Total nodes to launch: {len(actions)} ==========")
 
     return actions
@@ -302,7 +383,7 @@ def generate_launch_description():
         DeclareLaunchArgument(
             "control_mode",
             default_value="",
-            description="Override control mode from YAML (teleop_act or moveit_planning). If empty, uses default_control_mode from config file",
+            description="Override control mode from YAML (teleop, model_inference, or moveit_planning). If empty, uses default_control_mode from config file",
         ),
         DeclareLaunchArgument(
             "with_inference",
@@ -318,6 +399,11 @@ def generate_launch_description():
             "moveit_display",
             default_value="true",
             description="Launch RViz for MoveIt visualization (only used if MoveIt is enabled)",
+        ),
+        DeclareLaunchArgument(
+            "record",
+            default_value="false",
+            description="Enable automatic rosbag recording (auto-discovers topics from config)",
         ),
         OpaqueFunction(function=launch_setup),
     ])

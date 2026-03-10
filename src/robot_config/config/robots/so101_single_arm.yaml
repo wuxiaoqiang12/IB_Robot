@@ -43,10 +43,28 @@ robot:
     shoulder_link: shoulder
 
   # Control mode management
-  default_control_mode: "teleop_act"
+  default_control_mode: "model_inference"
 
   control_modes:
-    teleop_act:
+    # Human teleoperation mode (direct control via leader arm/gamepad)
+    teleop:
+      description: "Human teleoperation mode (direct control)"
+      description_cn: "人工遥操作模式（直接控制）"
+      controllers:
+        - joint_state_broadcaster
+        - arm_position_controller
+        - gripper_position_controller
+      inference:
+        enabled: false
+        force_disable: true  # Explicitly disable inference in teleop mode
+      executor:
+        type: topic
+        mode: teleop
+        queue_size: 100
+        control_frequency: 50.0
+
+    # Model inference mode (ACT/pi0 end-to-end control)
+    model_inference:
       description: "High-frequency end-to-end control mode (ACT/pi0)"
       description_cn: "高频端到端控制模式（ACT/pi0）"
       controllers:
@@ -72,7 +90,7 @@ robot:
       # ============================================
       executor:
         type: topic  # topic | action
-        mode: teleop_act
+        mode: model_inference
         queue_size: 100
         control_frequency: 50.0
 
@@ -265,6 +283,26 @@ robot:
             mode: nearest
             tolerance_ms: 500
         safety_behavior: hold  # 'zeros' to send zeros, 'hold' to maintain last command
+
+  # ============================================
+  # Teleoperation Configuration (for human teleop mode)
+  # ============================================
+  teleoperation:
+    enabled: true
+    active_device: "so101_leader"
+    devices:
+      - name: "so101_leader"
+        type: "leader_arm"
+        port: "/dev/ttyACM1"
+        calib_file: "$(env HOME)/.calibrate/so101_leader_calibrate.json"
+    safety:
+      joint_limits:
+        "1": {"min": -2.0693, "max": 2.0709}
+        "2": {"min": -1.92, "max": 1.92}
+        "3": {"min": -1.6813, "max": 1.6828}
+        "4": {"min": -1.65806, "max": 1.65806}
+        "5": {"min": -2.9115, "max": 2.9115}
+        "6": {"min": 0.0, "max": 1.0}  # Gripper
 
     recording:
       storage: mcap

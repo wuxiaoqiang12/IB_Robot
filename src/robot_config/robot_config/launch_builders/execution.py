@@ -10,26 +10,12 @@ This module handles:
 import os
 from launch_ros.actions import Node
 
-from robot_config.utils import parse_bool
+from robot_config.utils import parse_bool, prepare_lerobot_env
 from robot_config.contract_builder import (
     synthesize_contract,
     get_contract_output_path,
     save_contract,
 )
-
-
-def _prepare_lerobot_env():
-    """Prepare environment with lerobot PYTHONPATH."""
-    env = os.environ.copy()
-    workspace_path = os.environ.get("WORKSPACE", os.getcwd())
-    lerobot_src = os.path.join(workspace_path, "libs/lerobot/src")
-
-    if os.path.exists(lerobot_src):
-        current_pp = env.get("PYTHONPATH", "")
-        env["PYTHONPATH"] = f"{lerobot_src}:{current_pp}" if current_pp else lerobot_src
-
-    return env
-
 
 def generate_inference_node(robot_config, control_mode, use_sim=False):
     """Generate inference service node with auto-synthesized contract.
@@ -114,7 +100,7 @@ def generate_monolithic_inference_node(robot_config, control_mode, use_sim=False
     print(f"[robot_config]   Contract: {contract_path}")
 
     # Step 4: Prepare environment
-    env = _prepare_lerobot_env()
+    env = prepare_lerobot_env()
     if env.get("PYTHONPATH"):
         print(f"[robot_config] Injected PYTHONPATH: {env['PYTHONPATH']}")
 
@@ -182,7 +168,7 @@ def generate_distributed_inference_nodes(robot_config, control_mode, use_sim=Fal
     print(f"[robot_config]   Contract: {contract_path}")
 
     # Step 4: Prepare environment
-    env = _prepare_lerobot_env()
+    env = prepare_lerobot_env()
 
     # Topic names for distributed pipeline
     preprocessed_topic = "/preprocessed/batch"
@@ -351,7 +337,7 @@ def generate_action_dispatcher_node(robot_config, control_mode, use_sim=False):
     return action_dispatcher_node
 
 
-def generate_execution_nodes(robot_config, control_mode="teleop_act", use_sim=False):
+def generate_execution_nodes(robot_config, control_mode="model_inference", use_sim=False):
     """Generate all execution nodes (inference + dispatcher).
 
     This is the main entry point for execution system generation.
@@ -369,7 +355,7 @@ def generate_execution_nodes(robot_config, control_mode="teleop_act", use_sim=Fa
     nodes = []
 
     if not control_mode or control_mode == "default":
-        control_mode = robot_config.get("default_control_mode", "teleop_act")
+        control_mode = robot_config.get("default_control_mode", "model_inference")
 
     # Step 1: Generate inference node(s) (if enabled)
     try:
