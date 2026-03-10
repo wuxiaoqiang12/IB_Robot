@@ -41,7 +41,7 @@ from rosetta.common.contract_utils import (
     zero_pad,
 )
 from rosetta.common.encoders import enc_variant_list
-from rosetta_interfaces.msg import VariantsList
+from ibrobot_msgs.msg import VariantsList
 
 
 @dataclass(slots=True)

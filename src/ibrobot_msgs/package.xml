@@ -1,9 +1,9 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>rosetta_interfaces</name>
+  <name>ibrobot_msgs</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>Global interface package for IB-Robot custom messages, actions, and services</description>
   <maintainer email="isaac.blankenau@gmail.com">ros</maintainer>
   <license>Apache-2.0</license>
 

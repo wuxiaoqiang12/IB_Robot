@@ -40,8 +40,8 @@ class TensorMsgConverter:
 
     @staticmethod
     def to_variant(batch: Dict[str, Any]) -> Any:
-        """Encode a dictionary of Tensors into a rosetta_interfaces/msg/VariantsList."""
-        msg_cls = get_message("rosetta_interfaces/msg/VariantsList")
+        """Encode a dictionary of Tensors into a ibrobot_msgs/msg/VariantsList."""
+        msg_cls = get_message("ibrobot_msgs/msg/VariantsList")
         msg = msg_cls()
         msg.variants = []
         
@@ -49,7 +49,7 @@ class TensorMsgConverter:
             if not any(key.startswith(p) for p in ['task', 'observation', 'action']):
                 continue
                 
-            variant_msg = get_message("rosetta_interfaces/msg/Variant")()
+            variant_msg = get_message("ibrobot_msgs/msg/Variant")()
             variant_msg.key = key
             
             if isinstance(value, Tensor):

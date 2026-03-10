@@ -23,8 +23,8 @@ from std_msgs.msg import Int32
 from sensor_msgs.msg import JointState
 from std_srvs.srv import Empty
 
-from rosetta_interfaces.action import DispatchInfer
-from rosetta_interfaces.msg import VariantsList
+from ibrobot_msgs.action import DispatchInfer
+from ibrobot_msgs.msg import VariantsList
 from rosetta.common.contract_utils import load_contract, iter_specs
 from tensormsg.converter import TensorMsgConverter
 

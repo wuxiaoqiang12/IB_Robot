@@ -36,7 +36,7 @@ from rosetta.common.contract_utils import (
     StreamBuffer,
     decode_value,
 )
-from rosetta_interfaces.msg import VariantsList
+from ibrobot_msgs.msg import VariantsList
 
 
 @dataclass
@@ -387,7 +387,7 @@ class BaseInferenceNode(Node, ABC):
 
     def _create_action_msg(self, action) -> "VariantsList":
         """Create VariantsList message from action array."""
-        from rosetta_interfaces.msg import Variant
+        from ibrobot_msgs.msg import Variant
         from std_msgs.msg import MultiArrayDimension
 
         if torch.is_tensor(action):

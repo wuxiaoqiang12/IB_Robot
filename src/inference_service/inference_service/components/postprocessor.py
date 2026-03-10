@@ -34,7 +34,7 @@ from rosetta.common.contract_utils import (
     load_contract,
 )
 from tensormsg.converter import TensorMsgConverter
-from rosetta_interfaces.msg import VariantsList
+from ibrobot_msgs.msg import VariantsList
 
 
 class PostprocessorBase(ABC):
