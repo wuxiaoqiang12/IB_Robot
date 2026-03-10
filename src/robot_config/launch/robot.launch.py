@@ -28,6 +28,9 @@ Usage:
     # Teleop mode (human teleoperation)
     ros2 launch robot_config robot.launch.py robot_config:=so101_single_arm control_mode:=teleop record:=true
 
+    # Teleop mode with episodic recording (episode-by-episode)
+    ros2 launch robot_config robot.launch.py robot_config:=so101_single_arm control_mode:=teleop record:=true record_mode:=episodic
+
     # MoveIt planning mode (auto-detected, with RViz)
     ros2 launch robot_config robot.launch.py robot_config:=so101_single_arm control_mode:=moveit_planning use_sim:=true
 
@@ -55,6 +58,7 @@ Launch Arguments:
     with_moveit: Enable MoveIt motion planning. If empty, auto-detects from control mode name
     moveit_display: Launch RViz for MoveIt visualization (default: true, only used if MoveIt is enabled)
     record: Enable automatic rosbag recording (default: false, auto-discovers topics from config)
+    record_mode: Recording mode - 'continuous' (default, all-in-one bag) or 'episodic' (triggered episode-by-episode, requires manual record_cli in separate terminal)
 """
 
 import yaml
@@ -77,6 +81,7 @@ from robot_config.launch_builders.perception import generate_camera_nodes, gener
 from robot_config.launch_builders.simulation import generate_gazebo_nodes
 from robot_config.launch_builders.execution import generate_execution_nodes
 from robot_config.launch_builders.teleop import generate_teleop_nodes
+from robot_config.launch_builders.recording import generate_recording_nodes
 
 
 def load_robot_config(robot_config_name, config_path_override=None):
@@ -303,49 +308,15 @@ def launch_setup(context, *args, **kwargs):
         record_enabled = parse_bool(record_str, default=False)
 
         if record_enabled:
-            from launch.actions import ExecuteProcess
-            from datetime import datetime
+            # Get recording mode (continuous or episodic)
+            record_mode = context.launch_configurations.get('record_mode', 'continuous')
 
-            print(f"[robot_config] ========== Setting up Automatic Recording ==========")
+            print(f"[robot_config] ========== Setting up Recording (mode: {record_mode}) ==========")
 
-            # Auto-discover topics to record
-            topics = ['/joint_states']
-
-            # Add controller command topics
-            topics.append('/arm_position_controller/commands')
-            topics.append('/gripper_position_controller/commands')
-
-            # Add diagnostics
-            topics.append('/diagnostics')
-
-            # Add camera topics from peripherals
-            peripherals = robot_config.get('peripherals', [])
-            for peripheral in peripherals:
-                if peripheral.get('type') == 'camera':
-                    name = peripheral.get('name', 'camera')
-                    # Add common camera topics
-                    topics.append(f'/camera/{name}/image_raw')
-                    topics.append(f'/camera/{name}/camera_info')
-
-            # Generate filename with timestamp
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            robot_name = robot_config.get('name', 'robot')
-            output_file = f"~/rosbag/{robot_name}_{timestamp}.mcap"
-
-            # Expand ~ to actual home directory
-            output_file = str(Path(output_file).expanduser())
-
-            print(f"[robot_config] Recording {len(topics)} topics to: {output_file}")
-            print(f"[robot_config] Topics: {topics}")
-
-            # Create recording action
-            recording_action = ExecuteProcess(
-                cmd=['ros2', 'bag', 'record', '-o', output_file] + topics,
-                output='screen'
-            )
-
-            actions.append(recording_action)
-            print(f"[robot_config] ✓ Recording action added")
+            # Generate recording nodes using the recording builder
+            recording_nodes = generate_recording_nodes(robot_config, active_control_mode, record_mode)
+            actions.extend(recording_nodes)
+            print(f"[robot_config] Added {len(recording_nodes)} recording node(s)")
         else:
             print(f"[robot_config] Recording disabled (record:={record_str})")
     except Exception as e:
@@ -404,6 +375,11 @@ def generate_launch_description():
             "record",
             default_value="false",
             description="Enable automatic rosbag recording (auto-discovers topics from config)",
+        ),
+        DeclareLaunchArgument(
+            "record_mode",
+            default_value="continuous",
+            description="Recording mode: 'continuous' (all-in-one bag) or 'episodic' (triggered episode-by-episode via episode_recorder)",
         ),
         OpaqueFunction(function=launch_setup),
     ])

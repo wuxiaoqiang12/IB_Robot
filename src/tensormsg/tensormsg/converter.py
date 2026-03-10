@@ -250,12 +250,12 @@ def _enc_joint_state(names, data, clamp):
 
 @register_decoder("std_msgs/msg/Float32MultiArray")
 def _dec_f32(msg, spec):
-    if spec and hasattr(spec, 'names') and spec.names:
-        return _decode_via_names(msg, spec.names)
     return np.asarray(msg.data, dtype=np.float32)
+
+@register_decoder("std_msgs/msg/Float64MultiArray")
+def _dec_f64(msg, spec):
+    return np.asarray(msg.data, dtype=np.float64)
 
 @register_decoder("std_msgs/msg/Int32MultiArray")
 def _dec_i32(msg, spec):
-    if spec and hasattr(spec, 'names') and spec.names:
-        return _decode_via_names(msg, spec.names)
     return np.asarray(msg.data, dtype=np.int32)
