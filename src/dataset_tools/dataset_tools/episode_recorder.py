@@ -84,8 +84,8 @@ from std_srvs.srv import Trigger
 import rosbag2_py
 
 from ibrobot_msgs.action import RecordEpisode
-from rosetta.common.contract_utils import load_contract
-from rosetta.common.contract_utils import qos_profile_from_dict
+from robot_config.contract_utils import load_contract
+from robot_config.contract_utils import qos_profile_from_dict
 
 
 # ------------------------------ Constants ------------------------------

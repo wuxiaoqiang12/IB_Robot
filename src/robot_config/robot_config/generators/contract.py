@@ -7,7 +7,7 @@ from robot_config, eliminating duplication between hardware configuration and ML
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
-from rosetta.common.contract_utils import (
+from robot_config.contract_utils import (
     Contract,
     ObservationSpec,
     ActionSpec,
@@ -85,7 +85,7 @@ def load_contract_with_robot_config(
         )
 
     def _task(it: Dict[str, Any]) -> Any:
-        from rosetta.common.contract_utils import TaskSpec
+        from robot_config.contract_utils import TaskSpec
         return TaskSpec(
             key=it.get("key", it["topic"]),
             topic=it["topic"],
@@ -99,7 +99,7 @@ def load_contract_with_robot_config(
     rec = contract_data.get("recording") or {}
     proc = contract_data.get("process") or {}
 
-    from rosetta.common.contract_utils import Contract
+    from robot_config.contract_utils import Contract
     return Contract(
         name=contract_data.get("name", "contract"),
         version=int(contract_data.get("version", 1)),

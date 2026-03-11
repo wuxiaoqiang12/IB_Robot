@@ -28,7 +28,7 @@ from std_srvs.srv import Empty
 
 from ibrobot_msgs.action import DispatchInfer
 from ibrobot_msgs.msg import VariantsList
-from rosetta.common.contract_utils import load_contract, iter_specs
+from robot_config.contract_utils import load_contract, iter_specs
 from tensormsg.converter import TensorMsgConverter
 
 from .topic_executor import TopicExecutor

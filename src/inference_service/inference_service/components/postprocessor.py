@@ -27,7 +27,7 @@ from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 
-from rosetta.common.contract_utils import (
+from robot_config.contract_utils import (
     SpecView,
     encode_value,
     iter_specs,

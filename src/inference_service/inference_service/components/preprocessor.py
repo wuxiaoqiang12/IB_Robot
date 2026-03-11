@@ -29,7 +29,7 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from rosidl_runtime_py.utilities import get_message
 
-from rosetta.common.contract_utils import (
+from robot_config.contract_utils import (
     StreamBuffer,
     SpecView,
     decode_value,

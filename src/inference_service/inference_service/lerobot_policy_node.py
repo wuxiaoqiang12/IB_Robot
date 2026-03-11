@@ -209,7 +209,7 @@ class LeRobotPolicyNode(PassiveInferenceNode):
 
         if hasattr(self, "_contract"):
             try:
-                from rosetta.common.contract_utils import contract_fingerprint
+                from robot_config.contract_utils import contract_fingerprint
 
                 current_fp = contract_fingerprint(self._contract)
                 policy_fp_path = Path(policy_path) / "contract_fingerprint.txt"

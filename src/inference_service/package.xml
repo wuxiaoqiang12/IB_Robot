@@ -22,6 +22,8 @@
   <depend>rosbag2_py</depend>
 
   <depend>ibrobot_msgs</depend>
+  <depend>tensormsg</depend>
+  <depend>robot_config</depend>
 
   <exec_depend>ros2python</exec_depend>
   <exec_depend>ros2idl_runtime_py</exec_depend>

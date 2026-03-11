@@ -26,7 +26,7 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile
 from diagnostic_msgs.msg import DiagnosticStatus, KeyValue
 
-from rosetta.common.contract_utils import (
+from robot_config.contract_utils import (
     load_contract,
     iter_specs,
     SpecView,
@@ -244,7 +244,7 @@ class BaseInferenceNode(Node, ABC):
         use_header = (spec.stamp_src == "header") or self._config.use_header_time
 
         if use_header:
-            from rosetta.common.contract_utils import stamp_from_header_ns
+            from robot_config.contract_utils import stamp_from_header_ns
 
             ts = stamp_from_header_ns(msg)
             ts_ns = int(ts) if ts is not None else self.get_clock().now().nanoseconds

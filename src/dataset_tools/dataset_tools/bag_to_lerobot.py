@@ -21,7 +21,7 @@ Dependencies
 ------------
 Only two shared modules (keep it unified with live inference):
 
-- `rosetta.common.contract_utils`:
+- `robot_config.contract_utils`:
     `load_contract`, `iter_specs`, `feature_from_spec`
 - `rosetta.common.processing_utils`:
     `decode_value`, `resample`, `stamp_from_header_ns`,
@@ -90,13 +90,13 @@ from rosidl_runtime_py.utilities import get_message
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
 # ---- Shared core (ONLY these two)
-from rosetta.common.contract_utils import (
+from robot_config.contract_utils import (
     load_contract,
     iter_specs,
     feature_from_spec,
     contract_fingerprint,
 )
-from rosetta.common.contract_utils import (
+from robot_config.contract_utils import (
     decode_value,
     resample,
     stamp_from_header_ns,
