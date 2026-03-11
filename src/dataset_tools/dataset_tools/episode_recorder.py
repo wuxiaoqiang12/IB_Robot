@@ -10,7 +10,7 @@ as they arrive (no alignment or caching). The set of topics,
 their types, QoS, and runtime parameters come from a "contract" file.
 
 The node exposes a `record_episode` Action (from
-`rosetta_interfaces/action/RecordEpisode.action`) so clients can start and stop
+`ibrobot_msgs/action/RecordEpisode.action`) so clients can start and stop
 recordings programmatically. A lightweight `record_episode/cancel` service is
 provided as a cancel path.
 
@@ -83,7 +83,7 @@ from std_srvs.srv import Trigger
 
 import rosbag2_py
 
-from rosetta_interfaces.action import RecordEpisode
+from ibrobot_msgs.action import RecordEpisode
 from rosetta.common.contract_utils import load_contract
 from rosetta.common.contract_utils import qos_profile_from_dict
 
@@ -183,6 +183,12 @@ class EpisodeRecorderServer(Node):
         # Storage tuning (kept optional & conservative by default)
         self.declare_parameter("storage_preset_profile", "")  # e.g., "zstd_fast"
         self.declare_parameter("storage_config_uri", "")  # file:// or path
+        # Expand user home directory (~) to absolute path
+        bag_base = self.get_parameter("bag_base_dir").get_parameter_value().string_value
+        self._bag_base = Path(bag_base).expanduser().resolve()
+
+        # Ensure directory exists
+        self._bag_base.mkdir(parents=True, exist_ok=True)
 
         contract_path = (
             self.get_parameter("contract_path").get_parameter_value().string_value
@@ -682,4 +688,6 @@ def main() -> None:
         # Quiet exit on Ctrl-C or orchestrated shutdown.
         pass
     finally:
-        rclpy.shutdown()
+        # Only shutdown if context is still valid
+        if rclpy.ok():
+            rclpy.shutdown()

@@ -104,7 +104,7 @@ from rosetta.common.contract_utils import (
 )
 
 # Import decoders to register them
-import rosetta.common.decoders  # noqa: F401
+import tensormsg.converter  # noqa: F401
 
 # ---------------------------------------------------------------------------
 
@@ -547,7 +547,7 @@ def export_bags_to_lerobot(
             
             # Handle consolidated action specs by concatenating multiple action streams
             for action_key, action_specs in action_specs_by_key.items():
-                if len(action_specs) > 1 and action_key in features:
+                if action_key in features:
                     # Concatenate all action values from different topics
                     action_values = []
                     for sv in action_specs:
@@ -556,25 +556,32 @@ def export_bags_to_lerobot(
                         if stream_val is not None:
                             val_array = np.asarray(stream_val, dtype=np.float32).reshape(-1)
                             action_values.append(val_array)
-                    
+
                     if action_values:
                         # Concatenate all action values
                         concatenated_action = np.concatenate(action_values)
+
+                        # Pad or truncate to match feature shape if necessary
+                        exp = int(features[action_key]["shape"][0])
+                        if concatenated_action.shape[0] != exp:
+                            fixed = np.zeros((exp,), dtype=np.float32)
+                            fixed[: min(exp, concatenated_action.shape[0])] = concatenated_action[: min(exp, concatenated_action.shape[0])]
+                            concatenated_action = fixed
+
                         frame[action_key] = concatenated_action
                     else:
                         # Use zero padding if no action values available
                         frame[action_key] = zero_pad_map[action_key]
-            
+
             # Process all other features
             for name in write_keys:
                 # Skip observation.state as it's handled above
                 if name == "observation.state":
                     continue
-                
-                # Skip consolidated actions as they're handled above
-                if name in action_specs_by_key and len(action_specs_by_key[name]) > 1: #TODO: I think this can just be if name == "action"
+
+                # Skip actions as they're handled above
+                if name in action_specs_by_key:
                     continue
-                    
                 ft = features[name]
                 dtype = ft["dtype"]
                 val = resampled.get(name, [None] * n_ticks)[i]

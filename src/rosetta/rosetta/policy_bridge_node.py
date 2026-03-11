@@ -46,7 +46,7 @@ from rosetta.common.contract_utils import (
     encode_value,
 )
 
-from rosetta_interfaces.action import RunPolicy
+from ibrobot_msgs.action import RunPolicy
 
 _ACTION_NAME = "run_policy"
 _FEEDBACK_PERIOD_S = 0.5

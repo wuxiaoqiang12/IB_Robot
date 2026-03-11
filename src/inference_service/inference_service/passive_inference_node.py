@@ -19,8 +19,8 @@ import rclpy.action
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from diagnostic_msgs.msg import DiagnosticStatus
 
-from rosetta_interfaces.action import DispatchInfer
-from rosetta_interfaces.msg import VariantsList
+from ibrobot_msgs.action import DispatchInfer
+from ibrobot_msgs.msg import VariantsList
 from inference_service.base_model_node import BaseInferenceNode
 
 

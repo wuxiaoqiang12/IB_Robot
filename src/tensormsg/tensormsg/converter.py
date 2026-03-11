@@ -40,8 +40,8 @@ class TensorMsgConverter:
 
     @staticmethod
     def to_variant(batch: Dict[str, Any]) -> Any:
-        """Encode a dictionary of Tensors into a rosetta_interfaces/msg/VariantsList."""
-        msg_cls = get_message("rosetta_interfaces/msg/VariantsList")
+        """Encode a dictionary of Tensors into a ibrobot_msgs/msg/VariantsList."""
+        msg_cls = get_message("ibrobot_msgs/msg/VariantsList")
         msg = msg_cls()
         msg.variants = []
         
@@ -49,7 +49,7 @@ class TensorMsgConverter:
             if not any(key.startswith(p) for p in ['task', 'observation', 'action']):
                 continue
                 
-            variant_msg = get_message("rosetta_interfaces/msg/Variant")()
+            variant_msg = get_message("ibrobot_msgs/msg/Variant")()
             variant_msg.key = key
             
             if isinstance(value, Tensor):
@@ -250,12 +250,12 @@ def _enc_joint_state(names, data, clamp):
 
 @register_decoder("std_msgs/msg/Float32MultiArray")
 def _dec_f32(msg, spec):
-    if spec and hasattr(spec, 'names') and spec.names:
-        return _decode_via_names(msg, spec.names)
     return np.asarray(msg.data, dtype=np.float32)
+
+@register_decoder("std_msgs/msg/Float64MultiArray")
+def _dec_f64(msg, spec):
+    return np.asarray(msg.data, dtype=np.float64)
 
 @register_decoder("std_msgs/msg/Int32MultiArray")
 def _dec_i32(msg, spec):
-    if spec and hasattr(spec, 'names') and spec.names:
-        return _decode_via_names(msg, spec.names)
     return np.asarray(msg.data, dtype=np.int32)

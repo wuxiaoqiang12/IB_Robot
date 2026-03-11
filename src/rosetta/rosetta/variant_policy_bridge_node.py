@@ -136,7 +136,7 @@ class VariantPolicyBridge(Node):
 
         # Setup publisher for inference output (raw action)
         self._cbg = ReentrantCallbackGroup()
-        from rosetta_interfaces.msg import VariantsList
+        from ibrobot_msgs.msg import VariantsList
         variant_msg_cls = VariantsList
         
         self._action_pub = self.create_publisher(

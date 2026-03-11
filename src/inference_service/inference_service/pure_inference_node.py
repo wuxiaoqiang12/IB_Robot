@@ -25,7 +25,7 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 
 from tensormsg.converter import TensorMsgConverter
-from rosetta_interfaces.msg import VariantsList
+from ibrobot_msgs.msg import VariantsList
 
 
 def _resolve_device(device: str) -> torch.device:

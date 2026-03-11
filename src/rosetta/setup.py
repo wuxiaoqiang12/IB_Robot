@@ -41,7 +41,6 @@ setup(
     # scripts here.
     entry_points={
         'console_scripts': [
-            'episode_recorder = rosetta.episode_recorder:main',
             'policy_bridge_node = rosetta.policy_bridge_node:main',
             'processors_pipeline = rosetta.processor_node:main',
             'variant_policy_bridge_node = rosetta.variant_policy_bridge_node:main',
