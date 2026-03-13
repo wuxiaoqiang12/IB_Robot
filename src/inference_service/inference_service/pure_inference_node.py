@@ -4,37 +4,30 @@ Pure inference node for distributed/composed mode.
 
 This node:
 - Subscribes to preprocessed VariantsList
-- Runs pure inference (no preprocessing/postprocessing)
+- Runs pure inference using PureInferenceEngine
 - Publishes raw action as VariantsList
 
-Designed to work with PreprocessorComponent and PostprocessorComponent.
+Designed to work with LeRobotPolicyNode in distributed mode.
+
+Request-Response Matching:
+- If input batch contains "_request_id", it will be passed through to output
+- This enables the edge node to match responses to pending requests
 """
 
 from __future__ import annotations
 
-import json
+import time
 import os
-from pathlib import Path
 from typing import Any, Dict, Optional
 
-import numpy as np
 import rclpy
-import torch
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 
 from tensormsg.converter import TensorMsgConverter
 from ibrobot_msgs.msg import VariantsList
-
-
-def _resolve_device(device: str) -> torch.device:
-    """Resolve device string to torch.device."""
-    if device == "auto":
-        if torch.cuda.is_available():
-            return torch.device("cuda")
-        return torch.device("cpu")
-    return torch.device(device)
+from inference_service.core.pure_inference_engine import PureInferenceEngine, resolve_device
 
 
 class PureInferenceNode(Node):
@@ -43,6 +36,8 @@ class PureInferenceNode(Node):
 
     Subscribes: /preprocessed/batch (VariantsList)
     Publishes: /inference/action (VariantsList)
+
+    Passes through "_request_id" from input to output for request matching.
     """
 
     def __init__(
@@ -55,17 +50,16 @@ class PureInferenceNode(Node):
     ):
         super().__init__(node_name)
 
-        self._device = _resolve_device(device)
-        self._policy = None
-        self._policy_type = ""
-        self._use_action_chunking = False
-        self._chunk_size = 1
+        if not policy_path:
+            raise ValueError("policy_path is required for PureInferenceNode")
 
-        # Load policy
-        if policy_path:
-            self._load_policy(policy_path)
+        self._input_topic = input_topic
+        self._output_topic = output_topic
 
-        # Subscriber for preprocessed input
+        self.get_logger().info(f"Loading policy from {policy_path} on device {device}...")
+        self._engine = PureInferenceEngine(policy_path=policy_path, device=device)
+        self.get_logger().info(f"Engine loaded: {self._engine.policy_type}, chunk_size={self._engine.chunk_size}")
+
         self._sub = self.create_subscription(
             VariantsList,
             input_topic,
@@ -74,98 +68,55 @@ class PureInferenceNode(Node):
             callback_group=ReentrantCallbackGroup(),
         )
 
-        # Publisher for raw action output
         self._pub = self.create_publisher(VariantsList, output_topic, 10)
 
+        self._inference_count = 0
+        self._total_latency_ms = 0.0
+
         self.get_logger().info(
-            f"PureInferenceNode ready: device={self._device}, "
+            f"PureInferenceNode ready: "
             f"input={input_topic}, output={output_topic}"
-        )
-
-    def _load_policy(self, policy_path: str):
-        """Load LeRobot policy."""
-        from lerobot.policies.factory import get_policy_class
-
-        is_hf_repo = "/" in policy_path and not os.path.exists(policy_path)
-
-        if is_hf_repo:
-            for policy_type in [
-                "act",
-                "diffusion",
-                "pi0",
-                "pi05",
-                "smolvla",
-                "tdmpc",
-                "vqbet",
-            ]:
-                try:
-                    PolicyCls = get_policy_class(policy_type)
-                    self._policy = PolicyCls.from_pretrained(policy_path)
-                    self._policy.to(self._device)
-                    self._policy.eval()
-                    self._policy_type = policy_type
-                    self.get_logger().info(f"Loaded {policy_type} from {policy_path}")
-                    break
-                except Exception as e:
-                    self.get_logger().debug(f"Not {policy_type}: {e}")
-        else:
-            cfg_json = os.path.join(policy_path, "config.json")
-            cfg_type = ""
-            if os.path.exists(cfg_json):
-                with open(cfg_json, "r", encoding="utf-8") as f:
-                    cfg = json.load(f)
-                    cfg_type = str(cfg.get("type", "")).lower()
-
-            if cfg_type:
-                PolicyCls = get_policy_class(cfg_type)
-                self._policy = PolicyCls.from_pretrained(policy_path)
-                self._policy.to(self._device)
-                self._policy.eval()
-                self._policy_type = cfg_type
-
-        if not self._policy:
-            raise RuntimeError(f"Failed to load policy from {policy_path}")
-
-        self._use_action_chunking = self._policy_type in ("act", "tdmpc", "vqbet")
-        if hasattr(self._policy.config, "chunk_size"):
-            self._chunk_size = self._policy.config.chunk_size
-        elif hasattr(self._policy.config, "action_chunk_size"):
-            self._chunk_size = self._policy.config.action_chunk_size
-
-        self.get_logger().info(
-            f"Policy loaded: type={self._policy_type}, "
-            f"chunking={self._use_action_chunking}, chunk_size={self._chunk_size}"
         )
 
     def _inference_cb(self, msg: VariantsList):
         """Run inference on preprocessed input."""
         try:
-            batch = TensorMsgConverter.from_variant(msg, self._device)
+            start_time = time.perf_counter()
 
-            with torch.no_grad():
-                if self._use_action_chunking:
-                    action = self._policy.predict_action_chunk(batch)
-                    action = action.squeeze(0)
-                else:
-                    action = self._policy.select_action(batch)[0]
+            batch = TensorMsgConverter.from_variant(msg, self._engine._device)
 
-            # Publish as VariantsList
-            result = {"action": action}
-            out_msg = TensorMsgConverter.to_variant(result)
+            req_list = batch.pop("task.request_id", None)
+            request_id = req_list[0] if req_list and isinstance(req_list, list) else None
+
+            result = self._engine(batch)
+
+            inference_latency_ms = (time.perf_counter() - start_time) * 1000.0
+
+            out_batch: Dict[str, Any] = {"action": result.action}
+
+            if request_id is not None:
+                out_batch["action.request_id"] = [request_id]
+
+            out_batch["_latency_ms"] = inference_latency_ms
+
+            out_msg = TensorMsgConverter.to_variant(out_batch)
             self._pub.publish(out_msg)
+
+            self._inference_count += 1
+            self._total_latency_ms += inference_latency_ms
+
+            if self._inference_count % 100 == 0:
+                avg_latency = self._total_latency_ms / self._inference_count
+                self.get_logger().info(
+                    f"Inference stats: count={self._inference_count}, "
+                    f"avg_latency={avg_latency:.1f}ms, "
+                    f"last_latency={inference_latency_ms:.1f}ms"
+                )
 
         except Exception as e:
             self.get_logger().error(f"Inference failed: {e}")
-
-    def infer(self, batch: Dict[str, Any]) -> Dict[str, Any]:
-        """Direct inference for zero-copy mode."""
-        with torch.no_grad():
-            if self._use_action_chunking:
-                action = self._policy.predict_action_chunk(batch)
-                action = action.squeeze(0)
-            else:
-                action = self._policy.select_action(batch)[0]
-        return {"action": action}
+            import traceback
+            self.get_logger().error(traceback.format_exc())
 
 
 def main():
@@ -173,13 +124,14 @@ def main():
 
     from rclpy.node import Node
 
-    # Use temp node to read ROS parameters
     temp = Node("_pure_inference_param_reader")
     temp.declare_parameter("policy_path", "")
     temp.declare_parameter("input_topic", "/preprocessed/batch")
     temp.declare_parameter("output_topic", "/inference/action")
     temp.declare_parameter("device", "auto")
-    temp.declare_parameter("use_sim_time", False)
+    
+    if not temp.has_parameter("use_sim_time"):
+        temp.declare_parameter("use_sim_time", False)
 
     params = {
         "policy_path": temp.get_parameter("policy_path").value or None,
