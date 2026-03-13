@@ -369,6 +369,11 @@ class MoveItGateway(Node):
         # 对orientation进行shoulder坐标系XZ平面投影，以适应5自由度机械臂的IK约束
         orig_quat = (msg.orientation.x, msg.orientation.y, msg.orientation.z, msg.orientation.w)
 
+        # 检查是否为零四元数，如果是则使用默认姿态（无旋转）
+        if abs(orig_quat[0]) < 1e-9 and abs(orig_quat[1]) < 1e-9 and abs(orig_quat[2]) < 1e-9 and abs(orig_quat[3]) < 1e-9:
+            self.get_logger().warning("Received zero quaternion, using default orientation (0, 0, 0, 1)")
+            orig_quat = (0.0, 0.0, 0.0, 1.0)
+
         # 尝试多种约束策略，从严格到宽松
         strategies = [
             ("Gripper Z-axis constraint", self.constrain_to_z_axis_only(orig_quat)),
