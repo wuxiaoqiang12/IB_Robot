@@ -157,6 +157,7 @@ robot:
         - gripper_position_controller
       inference:
         enabled: true
+        execution_mode: "distributed" # 或 "monolithic" (单机零拷贝)
         model: so101_act
 ```
 

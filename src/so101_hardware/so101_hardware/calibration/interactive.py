@@ -24,7 +24,7 @@ def run_interactive_calibration(bus, joint_names: list[str], logger=None) -> dic
     log = logger.info if logger else print
     log_error = logger.error if logger else print
 
-    log("\n--- Starting Follower arm calibration ---")
+    log("\n--- Starting arm calibration ---")
     log("!!! Note: This process requires user interaction !!!")
 
     try:
@@ -34,7 +34,7 @@ def run_interactive_calibration(bus, joint_names: list[str], logger=None) -> dic
         log("All motors set to position mode.")
 
         # Capture homing offsets
-        input(">>> (1/2) Move Follower arm to mid-position of range, then press ENTER ...")
+        input(">>> (1/2) Move arm to mid-position of range, then press ENTER ...")
         sys.stdout.flush()
         homing_offsets = bus.set_half_turn_homings()
         log(f"Captured homing offsets: {homing_offsets}")

@@ -1,3 +1,5 @@
+import os
+from glob import glob
 from setuptools import setup
 
 package_name = 'inference_service'
@@ -10,6 +12,7 @@ setup(
         ('share/ament_index/resource_index/packages',
          ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
     ],
     install_requires=[
         'rclpy',
@@ -29,8 +32,6 @@ setup(
         'console_scripts': [
             'lerobot_policy_node = inference_service.lerobot_policy_node:main',
             'pure_inference_node = inference_service.pure_inference_node:main',
-            'preprocessor_node = inference_service.components.preprocessor:main',
-            'postprocessor_node = inference_service.components.postprocessor:main',
             'yolo_graspnet_node = inference_service.yolo_graspnet_node:main',
             'mock_inference_node = inference_service.mock_inference_node:main',
             'simple_mock_inference = inference_service.simple_mock_inference:main',

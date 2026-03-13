@@ -157,6 +157,7 @@ robot:
         - gripper_position_controller
       inference:
         enabled: true
+        execution_mode: "distributed" # Or "monolithic" (single-machine zero-copy)
         model: so101_act
 ```
 
@@ -283,6 +284,7 @@ robot:
         - gripper_position_controller
       inference:
         enabled: true
+        execution_mode: "distributed" # Or "monolithic" (single-machine zero-copy)
         model: so101_act
 
     moveit_planning:

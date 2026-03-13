@@ -76,6 +76,7 @@ robot:
       # ============================================
       inference:
         enabled: true
+        # execution_mode: "distributed"
         model: so101_act
         action_server: /inference/dispatch
         observations:
