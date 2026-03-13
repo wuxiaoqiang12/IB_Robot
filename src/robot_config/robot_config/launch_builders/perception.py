@@ -81,17 +81,25 @@ def generate_camera_nodes(robot_config, use_sim=False):
 
         elif driver == "realsense":
             # Use realsense2_camera package
+            w = periph.get("width", 640)
+            h = periph.get("height", 480)
+            fps = periph.get("fps", 30)
+            streams = periph.get("streams") or (
+                ["color"]
+                + (["depth"] if periph.get("align_depth", False) else [])
+                + (["pointcloud"] if periph.get("enable_pointcloud", False) else [])
+            )
             params = {
                 "use_sim_time": is_sim,
                 "camera_name": name,
-                "camera_fps": periph.get("fps", 30),
-                "color_width": periph.get("width", 640),
-                "color_height": periph.get("height", 480),
+                "rgb_camera.color_profile": f"{w}x{h}x{fps}",
                 "color_format": periph.get("pixel_format", "bgr8").upper(),
                 "camera_frame_id": periph.get("frame_id", f"camera_{name}_frame"),
-                "enable_pointcloud": periph.get("enable_pointcloud", False),
+                "align_depth.enable": "depth" in streams,
+                "pointcloud.enable": "pointcloud" in streams,
+                "pointcloud.stream_filter": 2 if "pointcloud" in streams else 0,
+                "pointcloud.ordered_pc": False,
                 "enable_sync": periph.get("enable_sync", True),
-                "align_depth": periph.get("align_depth", False),
             }
 
             if "depth_width" in periph:
