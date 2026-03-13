@@ -6,7 +6,7 @@
 #   ./scripts/build.sh --mixin release    # Release build
 #   ./scripts/build.sh --mixin debug test # Debug with tests
 #   ./scripts/build.sh --list-mixins      # Show available mixins
-#   ./scripts/build.sh --packages-select rosetta  # Build specific package
+#   ./scripts/build.sh --packages-select tensormsg  # Build specific package
 #
 set -e
 

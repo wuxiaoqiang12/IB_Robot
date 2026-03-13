@@ -432,7 +432,6 @@ print(f"Smoothing enabled: {manager.is_enabled}")
 - PyTorch
 - NumPy
 - ibrobot_msgs
-- rosetta
 - tensormsg
 
 ## 许可证

@@ -117,7 +117,6 @@ graph TB
         C1["控制框架<br/>ros2_control"]
         C2["硬件接口<br/>so101_hardware"]
         C3["模型描述<br/>robot_description"]
-        C4["机器人适配层<br/>robot_interface"]
     end
 
     subgraph "执行层 Execution"
@@ -127,7 +126,7 @@ graph TB
 
     subgraph "全局管理 Global"
         G1["配置中心<br/>robot_config"]
-        G2["接口标准定义<br/>tensormsg_interfaces"]
+        G2["接口标准定义<br/>ibrobot_msgs"]
     end
 
     %% 数据流
@@ -153,8 +152,6 @@ graph TB
     A3 -.-> C1
     
     C1 --> C2
-    C2 --> C4
-    C4 --> E1
     C1 -.-> E2
     
     C3 --> C1
@@ -238,6 +235,7 @@ IB-Robot 深度集成 ROS 2 Control，并在此基础上实现了：
 | 组件 | 状态 | 功能描述 |
 |------|------|----------|
 | **action_dispatch** | 已实现 | **统一动作执行器**。支持双模切换（Topic/Action），负责指令平滑、保护及状态上报。 |
+| **robot_teleop** | 已实现 | **遥操作控制**。提供 Leader-Follower 控制逻辑及外设接入能力。 |
 | **ledog_slam** | 已实现 | 提供基础的 SLAM 定位与 Nav2 导航能力。 |
 
 ---
@@ -250,7 +248,7 @@ IB-Robot 深度集成 ROS 2 Control，并在此基础上实现了：
 |------|------|----------|
 | **tensormsg** | 已实现 | **转换枢纽**。连接 ROS 2 环境与 LeRobot 模型，负责数据双向转换。 |
 | **inference_service** | 已实现 | 多模型推理框架，支持 VLA/SmolVLA/YOLO 等模型的容器化部署。 |
-| **tensormsg_interfaces** | 已废弃 | **[Legacy]** 系统统一接口定义 (由各模块内部定义替代)。 |
+| **dataset_tools** | 已实现 | **数据集工具箱**。负责 Episode 录制、MCAP 数据导出及 LeRobot 格式转换。 |
 
 ---
 
@@ -263,7 +261,6 @@ IB-Robot 深度集成 ROS 2 Control，并在此基础上实现了：
 | **robot_config** | 已实现 | **配置中心**。管理全系统的规格文件（YAML），作为唯一真相来源。 |
 | **robot_description** | 已实现 | 统一管理机器人 URDF/SRDF 及相关 Mesh 资产。 |
 | **so101_hardware** | 已实现 | SO-101 舵机臂的实机驱动实现。 |
-| **robot_interface** | 已废弃 | **[Legacy]** 机器人适配抽象层 (功能已迁移至 robot_config)。 |
 
 ---
 
@@ -277,17 +274,18 @@ IB-Robot 深度集成 ROS 2 Control，并在此基础上实现了：
 
 ### Phase 2: 感知增强与验证 🔧
 - [x] 基础视觉传感器接入 (USB/RealSense)
+- [x] 接口定义统一化 (`ibrobot_msgs`)
 - [ ] 自动化配置一致性验证脚本 (validate_config)
 - [ ] 传感器外参在线标定工具
 
-### Phase 3: 高级智能与采集 🚧
-- [ ] 跨包数据闭环：从演示采集到自动导出数据集
+### Phase 3: 高级智能与采集 ✅
+- [x] 数据闭环：从演示采集到自动导出数据集 (`dataset_tools`)
+- [x] 多源遥操作接口 (`robot_teleop`)
 - [ ] 交互式调试工具：Attention 热力图可视化
-- [ ] 多源遥操作接口 (VR / Leader-Follower)
 
 ---
 
-## 快速开始
+**最后更新**：2026-03-09
 
 ### 1. 初始化环境
 ```bash

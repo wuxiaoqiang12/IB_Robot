@@ -56,13 +56,14 @@ IB_Robot/                           # Main Workspace
 ├── src/                            # [Submodule] Core source packages
 │   ├── robot_config/               # System master control and specs
 │   ├── action_dispatch/            # Unified action dispatcher (Dual-mode)
-│   ├── rosetta/                    # LeRobot ↔ ROS 2 Hub (To be renamed to tensormsg)
+│   ├── tensormsg/                  # LeRobot ↔ ROS 2 Hub (Tensor & Message conversion)
+│   ├── ibrobot_msgs/               # Unified system interfaces (Message/Action)
+│   ├── dataset_tools/              # Dataset collection & conversion (Episode Recorder)
+│   ├── robot_teleop/               # Teleoperation implementation (Leader-Follower)
 │   ├── robot_description/          # Unified URDF/SRDF descriptions
 │   ├── robot_moveit/               # MoveIt 2 motion planning integration
 │   ├── inference_service/          # Multi-model inference service
 │   ├── so101_hardware/             # SO-101 motor driver interface
-│   ├── robot_interface/            # [Deprecated] Replaced by robot_config
-│   ├── rosetta_interfaces/         # [Agreed] Unified system interfaces
 │   └── workflows/                  # CI/CD configuration
 │
 ├── docs/                           # Detailed architecture and dev guides
@@ -149,7 +150,7 @@ ros2 launch robot_config robot.launch.py robot_config:=so101_single_arm use_sim:
 
 ### Manual Override (Advanced Debugging)
 ```bash
-ros2 launch robot_config robot.launch.py control_mode:=teleop_act with_inference:=true use_sim:=true
+ros2 launch robot_config robot.launch.py control_mode:=model_inference with_inference:=true use_sim:=true
 ```
 
 ---
@@ -161,7 +162,7 @@ ros2 launch robot_config robot.launch.py control_mode:=teleop_act with_inference
 | `robot_config` | Robot config name (matches YAML in `config/robots/`) | `so101_single_arm` |
 | `config_path` | Absolute path to config file (overrides `robot_config`) | Empty |
 | `use_sim` | Use Gazebo simulation mode | `false` |
-| `control_mode` | Override default mode (`teleop_act` / `moveit_planning`) | From YAML |
+| `control_mode` | Override default mode (`model_inference` / `moveit_planning` / `teleop`) | From YAML |
 | `with_inference`| Force enable/disable inference service | Auto-detect |
 | `with_moveit`   | Force enable/disable MoveIt core | Auto-detect |
 | `moveit_display`| Launch MoveIt RViz interface | `true` |

@@ -64,7 +64,7 @@ class TensorMsgConverter:
 
     @staticmethod
     def from_variant(msg, device: Optional[torch.device] = None) -> Dict[str, Any]:
-        """Decode a rosetta_interfaces/msg/VariantsList into a dictionary of Tensors."""
+        """Decode a ibrobot_msgs/msg/VariantsList into a dictionary of Tensors."""
         result = {}
         for variant_msg in msg.variants:
             result[str(variant_msg.key)] = _decode_variant(variant_msg, device)

@@ -192,8 +192,8 @@ def find_contract_path(robot_name: str) -> str:
         Contract file path (absolute path)
 
     Search order:
-        1. rosetta package share directory: contracts/<robot_name>.yaml
-        2. Workspace relative path: src/rosetta/contracts/<robot_name>.yaml
+        1. robot_config package share directory: config/contracts/<robot_name>.yaml
+        2. Workspace relative path: src/robot_config/config/contracts/<robot_name>.yaml
         3. Fallback: act_grab_pan.yaml
     """
     contract_filename = f"{robot_name}.yaml"
@@ -201,8 +201,8 @@ def find_contract_path(robot_name: str) -> str:
     # Try package share directory
     try:
         from ament_index_python.packages import get_package_share_directory
-        rosetta_share = get_package_share_directory('rosetta')
-        contract_path = os.path.join(rosetta_share, 'contracts', contract_filename)
+        config_share = get_package_share_directory('robot_config')
+        contract_path = os.path.join(config_share, 'config', 'contracts', contract_filename)
         if os.path.exists(contract_path):
             return contract_path
     except:
@@ -211,18 +211,18 @@ def find_contract_path(robot_name: str) -> str:
     # Try workspace relative path
     workspace_root = find_workspace_root()
     if workspace_root:
-        contract_path = os.path.join(workspace_root, 'src', 'rosetta', 'contracts', contract_filename)
+        contract_path = os.path.join(workspace_root, 'src', 'robot_config', 'config', 'contracts', contract_filename)
         if os.path.exists(contract_path):
             return contract_path
 
     # Fallback to act_grab_pan.yaml
     if workspace_root:
-        fallback_path = os.path.join(workspace_root, 'src', 'rosetta', 'contracts', 'act_grab_pan.yaml')
+        fallback_path = os.path.join(workspace_root, 'src', 'robot_config', 'config', 'contracts', 'act_grab_pan.yaml')
         if os.path.exists(fallback_path):
             return fallback_path
 
     # Last resort: return expected path even if it doesn't exist
-    return f"src/rosetta/contracts/{contract_filename}"
+    return f"src/robot_config/config/contracts/{contract_filename}"
 
 
 def find_workspace_root() -> str:

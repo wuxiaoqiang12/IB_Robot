@@ -25,7 +25,7 @@ graph TD
     %% 执行层
     Init --> InfSrv[inference_service]
     Init --> Dispatch[action_dispatch]
-    Init --> Bridge[rosetta / tensormsg]
+    Init --> Bridge[tensormsg]
     
     %% 数据闭环
     subgraph "决策与调度 (Decision & Dispatch)"
@@ -62,10 +62,10 @@ graph TD
 ### 3. 📂 `action_dispatch` — 动作调度与安全小脑
 负责将高层张量转化为机器人可执行的连贯动作。
 - **Action Chunking**: 管理长序列动作块，内置线性插值逻辑，确保关节运动平滑无抖动。
-- **双模支持**: 同时支持 `teleop_act`（高频话题）和 `moveit_planning`（轨迹动作）两种执行模式。
+- **双模支持**: 同时支持 `model_inference`（高频话题）和 `moveit_planning`（轨迹动作）两种执行模式。
 - **水位线监控**: 实时监控动作队列状态，在数据中断时提供 Hold/Stop 等安全降级策略。
 
-### 4. 📂 `rosetta` — LeRobot ↔ ROS 2 协议枢纽
+### 4. 📂 `tensormsg` — LeRobot ↔ ROS 2 协议枢纽
 *(拟更名为 `tensormsg`)*
 - **实时序列化**: 实现 ROS 2 消息与 NumPy/Torch 张量之间的高性能转换。
 - **时戳对齐**: 采用 `asof` 采样策略，确保多传感器观测数据在时间轴上精确对齐。
@@ -92,7 +92,7 @@ graph TD
 | :--- | :--- |
 | **全量编译** | `./scripts/build.sh` |
 | **启动 MoveIt 调试** | `ros2 launch robot_config robot.launch.py control_mode:=moveit_planning use_sim:=true` |
-| **启动 AI 推理** | `ros2 launch robot_config robot.launch.py control_mode:=teleop_act use_sim:=true with_inference:=true` |
+| **启动 AI 推理** | `ros2 launch robot_config robot.launch.py control_mode:=model_inference use_sim:=true with_inference:=true` |
 | **配置一致性检查** | `python3 scripts/validate_config.py` |
 
 ---

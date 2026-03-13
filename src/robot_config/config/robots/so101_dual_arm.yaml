@@ -100,9 +100,9 @@ robot:
         pitch: 0.0
         yaw: 0.0
 
-  # Rosetta contract integration
+  # IB-Robot contract integration
   contract:
-    base_contract: $(find rosetta)/contracts/aloha_act.yaml
+    base_contract: $(find robot_config)/config/contracts/act_grab_pan.yaml
     rate_hz: 20
     max_duration_s: 90.0
 

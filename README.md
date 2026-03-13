@@ -55,13 +55,14 @@ IB_Robot/                           # 主工作空间 (本仓库)
 ├── src/                            # [子模块] 核心源码包集合
 │   ├── robot_config/               # 系统总控、规格定义与启动入口
 │   ├── action_dispatch/            # 统一动作执行器 (双模支持)
-│   ├── rosetta/                    # LeRobot ↔ ROS 2 协议转换枢纽 (拟更名为 tensormsg)
+│   ├── tensormsg/                  # LeRobot ↔ ROS 2 协议转换枢纽 (张量与消息转换)
+│   ├── ibrobot_msgs/               # 系统统一接口定义 (Message/Action)
+│   ├── dataset_tools/              # 数据集采集与转换工具 (Episode Recorder)
+│   ├── robot_teleop/               # 遥操作控制实现 (Leader-Follower/控制器)
 │   ├── robot_description/          # 统一机器人 URDF/SRDF 模型描述
-│   ├── robot_moveit/               # MoveIt 2运动规划集成
+│   ├── robot_moveit/               # MoveIt 2 运动规划集成
 │   ├── inference_service/          # 多模型推理与部署服务
 │   ├── so101_hardware/             # SO-101 电机驱动接口
-│   ├── robot_interface/            # [已废弃] 机器人适配抽象层 (由 robot_config 替代)
-│   ├── rosetta_interfaces/         # [已协定] 系统统一接口定义
 │   └── workflows/                  # CI/CD 配置
 │
 ├── docs/                           # 深度架构文档与开发指南
@@ -148,7 +149,7 @@ ros2 launch robot_config robot.launch.py robot_config:=so101_single_arm use_sim:
 
 ### 手动覆盖自动检测
 ```bash
-ros2 launch robot_config robot.launch.py control_mode:=teleop_act with_inference:=true use_sim:=true
+ros2 launch robot_config robot.launch.py control_mode:=model_inference with_inference:=true use_sim:=true
 ```
 
 ---
@@ -160,7 +161,7 @@ ros2 launch robot_config robot.launch.py control_mode:=teleop_act with_inference
 | `robot_config` | 机器人配置名称 (对应 `config/robots/` 下的 YAML) | `so101_single_arm` |
 | `config_path` | 配置文件绝对路径 (可选，覆盖 `robot_config`) | 空 |
 | `use_sim` | 是否使用 Gazebo 仿真模式 | `false` |
-| `control_mode` | 覆盖默认控制模式 (`teleop_act` / `moveit_planning`) | 从 YAML 读取 |
+| `control_mode` | 覆盖默认控制模式 (`model_inference` / `moveit_planning` / `teleop`) | 从 YAML 读取 |
 | `with_inference` | 强制启用/禁用推理服务 (空则自动检测) | 空 |
 | `with_moveit` | 强制启用/禁用 MoveIt 核心 (空则自动检测) | 空 |
 | `moveit_display` | 是否启动 MoveIt RViz 可视化界面 | `true` |

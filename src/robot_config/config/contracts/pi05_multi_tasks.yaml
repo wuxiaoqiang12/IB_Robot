@@ -65,8 +65,8 @@ actions:
     safety_behavior: hold  # 'zeros' to send all zeros when stopped, 'hold' to maintain last command
 
 process:
-  input_topic_name: /rosetta/batch
-  output_topic_name: /rosetta/action
+  input_topic_name: /tensormsg/batch
+  output_topic_name: /tensormsg/action
 
 
 recording:

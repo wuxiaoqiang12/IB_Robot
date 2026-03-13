@@ -97,7 +97,7 @@ def load_contract_config(data: Dict[str, Any]) -> ContractExtensionConfig:
     Example:
     ```yaml
     contract:
-      base_contract: $(find rosetta)/contracts/act_grab_pan.yaml
+      base_contract: $(find robot_config)/config/contracts/act_grab_pan.yaml
       observations:
         - key: observation.images.top
           topic: /camera/top

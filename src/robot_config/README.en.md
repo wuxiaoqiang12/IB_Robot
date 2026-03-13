@@ -8,7 +8,7 @@ This package provides a unified configuration system for robot hardware that bri
 
 - **ros2_control**: For joint/motor control interfaces
 - **Peripherals**: For cameras and other devices (via existing ROS2 drivers)
-- **Rosetta**: For ML policy I/O contracts
+- **tensormsg**: For ML policy I/O contracts
 
 The goal is to have a single source of truth for robot hardware configuration, eliminating duplication between different configuration systems.
 
@@ -20,7 +20,7 @@ The goal is to have a single source of truth for robot hardware configuration, e
   - `realsense2_camera` for RealSense D400 series
 - **TF publishing**: Automatic camera frame transform publishing
 - **Calibration support**: Standard ROS2 camera_info_manager integration
-- **Rosetta integration**: Contracts reference peripherals by name
+- **tensormsg integration**: Contracts reference peripherals by name
 
 ## Architecture
 
@@ -34,7 +34,7 @@ robot_config YAML (single source of truth)
         │       ├───► usb_cam (USB cameras)
         │       └───► realsense2_camera (RealSense D400)
         │
-        └───► Rosetta contracts (ML I/O)
+        └───► tensormsg contracts (ML I/O)
                 └───► PolicyBridge / EpisodeRecorder
 ```
 
@@ -498,9 +498,9 @@ ros2 run camera_calibration cameracalibrator \
   image:=/camera/top/image_raw
 ```
 
-## Rosetta Integration
+## tensormsg Integration
 
-The robot_config integrates with rosetta contracts by allowing observations to reference peripherals by name:
+The robot_config integrates with tensormsg contracts by allowing observations to reference peripherals by name:
 
 ```yaml
 # In robot_config
@@ -520,7 +520,6 @@ contract:
 
 When the contract is loaded, it will automatically include the camera metadata from the peripheral definition.
 
-## Migration from robot_interface
 
 The old `robot_interface` package used LeRobot's Robot class directly. This package replaces it with:
 

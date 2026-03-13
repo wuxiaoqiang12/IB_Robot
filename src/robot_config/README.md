@@ -8,7 +8,7 @@ ros2_control 和外设的统一机器人配置系统。
 
 - **ros2_control**：用于关节/电机控制接口
 - **外设**：用于相机和其他设备（通过现有 ROS2 驱动）
-- **Rosetta**：用于 ML 策略 I/O 契约
+- **tensormsg**：用于 ML 策略 I/O 契约
 
 目标是建立机器人硬件配置的单一数据源，消除不同配置系统之间的重复。
 
@@ -20,7 +20,7 @@ ros2_control 和外设的统一机器人配置系统。
   - `realsense2_camera` 用于 RealSense D400 系列
 - **TF 发布**：自动发布相机坐标系变换
 - **标定支持**：标准 ROS2 camera_info_manager 集成
-- **Rosetta 集成**：契约通过名称引用外设
+- **tensormsg 集成**：契约通过名称引用外设
 
 ## 架构
 
@@ -34,7 +34,7 @@ robot_config YAML（单一数据源）
         │       ├───► usb_cam（USB 相机）
         │       └───► realsense2_camera（RealSense D400）
         │
-        └───► Rosetta 契约（ML I/O）
+        └───► tensormsg 契约（ML I/O）
                 └───► PolicyBridge / EpisodeRecorder
 ```
 
@@ -319,7 +319,7 @@ ros2 launch robot_config robot.launch.py control_mode:=moveit_planning use_sim:=
 **解决方案：** 检查配置，确保每种模式使用互斥的控制器：
 ```yaml
 control_modes:
-  teleop_act:
+  model_inference:
     controllers:
       - arm_position_controller      # 位置控制器
   moveit_planning:
@@ -433,9 +433,9 @@ ros2 run camera_calibration cameracalibrator \
   image:=/camera/top/image_raw
 ```
 
-## Rosetta 集成
+## tensormsg 集成
 
-robot_config 通过允许观察通过名称引用外设来与 rosetta 契约集成：
+robot_config 通过允许观察通过名称引用外设来与 tensormsg 契约集成：
 
 ```yaml
 # 在 robot_config 中
@@ -455,7 +455,6 @@ contract:
 
 当契约加载时，将自动包含外设定义中的相机元数据。
 
-## 从 robot_interface 迁移
 
 旧的 `robot_interface` 包直接使用 LeRobot 的 Robot 类。本包替换为：
 
