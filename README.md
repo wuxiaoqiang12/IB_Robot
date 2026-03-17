@@ -2,6 +2,16 @@
 
 > IB-Robot (Intelligence Boom Robot): 融合 LeRobot 与 ROS 2 生态的智能具身机器人开发框架
 
+## 🌟 重磅更新：支持 OpenClaw 社交控制！
+
+我们非常激动地宣布，IB-Robot 现在已全面支持通过 **[OpenClaw](https://github.com/openclaw/openclaw)** AI Agent 进行远程社交控制！无论是在 **Gazebo 仿真环境** 还是 **真实 SO-101 机械臂** 上，你都可以通过 飞书、QQ、Discord 等软件，用最自然的语言与机器人对话并下达指令。
+
+| 仿真演示 (Simulation) | 真实硬件 (Real Robot) |
+|:---:|:---:|
+| <video src="docs/videos/openclaw_sim.mp4" width="400" controls></video> | <video src="docs/videos/openclaw_real.mp4" width="400" controls></video> |
+
+---
+
 ## 项目定位
 
 IB-Robot 是一个**智能融合机器人开发框架**，旨在打通 Hugging Face LeRobot 机器学习生态与 ROS 2 机器人中间件之间的壁垒，为具身智能研发提供从采集、训练到部署的完整工具链。
@@ -183,6 +193,84 @@ ros2 launch robot_config robot.launch.py control_mode:=model_inference with_infe
 sudo rm -rf /dev/shm/fastrtps_*
 export ROS_LOCALHOST_ONLY=1
 ```
+
+---
+
+## 🦾 基于 OpenClaw 的社交控制与远程 AI 代理
+
+IB-Robot 深度集成 [OpenClaw](https://github.com/openclaw/openclaw) AI Agent 框架，配合 [RosClaw](https://github.com/PlaiPin/rosclaw) 桥接器，实现通过 飞书、QQ、Discord 或 Slack 以自然语言对话的方式远程控制机器人。
+
+> **致谢**: 感谢 OpenClaw 团队提供的强大 AI 代理框架，以及 RosClaw 提供的 ROS 2 桥接方案。
+
+### 1. 机器人端配置 (RosClaw & Bridge)
+
+机器人端需要安装 WebSocket 桥接驱动并启动发现服务。
+
+- **拉取子模块**:
+  确保已拉取最新的 RosClaw 子模块源码：
+  ```bash
+  git submodule update --init --recursive
+  ```
+- **安装系统依赖**:
+  ```bash
+  # 必须安装 rosbridge_suite 以提供 WebSocket 通信能力
+  sudo apt-get update && sudo apt-get install -y ros-humble-rosbridge-suite
+  ```
+- **启动机器人本体**:
+  首先启动机器人本体程序（支持仿真或实机）：
+  ```bash
+  # use_sim:=true 为仿真模式，false 为真实硬件模式
+  ros2 launch robot_config robot.launch.py robot_config:=so101_single_arm control_mode:=model_inference use_sim:=true with_inference:=false
+  ```
+- **启动社交桥梁**:
+  本项目已将 RosClaw 作为子模块引入 `src/rosclaw`。执行以下脚本一键启动：
+  ```bash
+  # 自动编译子模块并启动 rosbridge_websocket, rosapi 和 discovery 节点
+  ./scripts/start_rosclaw.sh
+  ```
+  启动后，系统将在 `9090` 端口开启 WebSocket 服务。
+
+### 2. 控制端配置 (OpenClaw)
+
+OpenClaw 是机器人的“大脑”和“前端”，负责连接社交软件并调用 LLM 理解指令。
+
+- **安装 OpenClaw**:
+  推荐使用官方提供的快速安装脚本（需要 Node.js 22+）：
+  ```bash
+  # 安装 OpenClaw CLI
+  npm install -g openclaw
+  
+  # 执行初始化向导，配置你的 LLM (如 GLM-4/5 或 GPT-4)
+  openclaw onboard
+  ```
+- **集成 RosClaw 插件**:
+  ```bash
+  # 在 IB_Robot 根目录下执行，将插件安装到 OpenClaw
+  openclaw plugins install ./src/rosclaw/extensions/openclaw-plugin
+  ```
+- **配置机器人连接**:
+  ```bash
+  # 设置机器人 WebSocket 地址（替换为实际 IP）
+  openclaw config set plugins.entries.rosclaw.config.rosbridge.url "ws://<机器人IP>:9090"
+  ```
+- **注入 IB-Robot 专用技能**:
+  为了让 AI 准确理解单位（弧度）和视觉话题，请部署技能说明书：
+  ```bash
+  mkdir -p ~/.openclaw/workspace/skills/ibrobot-control
+  cp ./docs/ib_robot_social_skill.md ~/.openclaw/workspace/skills/ibrobot-control/SKILL.md
+  ```
+- **启动 Gateway**:
+  ```bash
+  openclaw gateway
+  ```
+
+### 3. 交互示例
+
+连接成功后，你可以在网页端 (`http://localhost:18789`) 或绑定的飞书、QQ 或 Discord 中输入：
+- *“查看机器人当前的能力清单”* —— 获取所有传感器话题。
+- *“把机械臂恢复到初始位置”* —— AI 会根据技能文档自动将角度转换为**弧度**。
+- *“帮我看看桌子上有什么？”* —— AI 会调用 `/camera/top/image_raw` 抓拍并分析图像。
+- *“帮我抓取桌上的瓶子”* —— AI 将触发 IB-Robot 的 `DispatchInfer` AI 任务。
 
 ---
 
