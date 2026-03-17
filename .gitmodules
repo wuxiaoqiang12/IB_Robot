@@ -8,3 +8,6 @@
 	url = https://github.com/AndrejOrsula/pymoveit2.git
     branch = main
     ignore = dirty
+[submodule "src/rosclaw"]
+	path = src/rosclaw
+	url = https://github.com/PlaiPin/rosclaw
