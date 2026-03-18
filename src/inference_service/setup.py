@@ -7,7 +7,7 @@ package_name = 'inference_service'
 setup(
     name=package_name,
     version='0.1.0',
-    packages=[package_name],
+    packages=[package_name, 'tools'],
     data_files=[
         ('share/ament_index/resource_index/packages',
          ['resource/' + package_name]),
@@ -36,6 +36,8 @@ setup(
             'mock_inference_node = inference_service.mock_inference_node:main',
             'simple_mock_inference = inference_service.simple_mock_inference:main',
             'test_system = inference_service.test_system:main',
+            'export_onnx_node = inference_service.export_onnx_node:main',
+            'loss_compare_node = inference_service.loss_compare_node:main',
         ],
     },
 )
